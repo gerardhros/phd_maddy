@@ -1,8 +1,12 @@
 # covariate extraction for meta-analysis
 # may 2022
 
+# clear environment
+rm(list=ls())
+
 # require packages
 require(readxl);require(terra);require(data.table);require(sf)
+require(stringr); require(foreign)
 
 # load in the data with location
 d1 <- readxl::read_xlsx('data/220330 coord 2 corr 211029 soc_mr_data.xlsx', range = "A2:I1155",sheet = 'data')
