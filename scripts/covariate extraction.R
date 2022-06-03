@@ -12,6 +12,12 @@ require(stringr); require(foreign)
 d1 <- readxl::read_xlsx('data/220330 coord 2 corr 211029 soc_mr_data.xlsx', range = "A2:I1155",sheet = 'data')
 d1 <- as.data.table(d1)
 
+  # prepare spatial object with sites
+  #d1.sven <- d1[,.(long_cor2,lat_cor2,id_site)]
+  #d1.sven <- unique(d1.sven)
+  #s1 <- st_as_sf(d1.sven,coords = c('long_cor2','lat_cor2'),crs = 4326)
+  #st_write(s1,'products/220603 exp sites.gpkg')
+
 # convert to spatial object
 s1 <- st_as_sf(d1,coords = c('long_cor2','lat_cor2'),crs = 4326)
 s1 <- vect(s1)
