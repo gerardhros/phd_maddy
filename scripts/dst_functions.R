@@ -63,18 +63,13 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   #filter rows for fert measures; where C is increasing; take min of predicted change and amount C avail in manure
   #****check kg/ha to mg/kg conversion
 
-  # DISTANCE TO TARGET APPROACH - UPDATE LATER ********
+  # DISTANCE TO TARGET APPROACH
   # add score reflecting distance to given target, being a linear function
-  # for water the minimum critical nsp for gw and sw is choosen
-  d3[, sY := pmax(0, 1 - (1 + dY) * yield_ref/yield_target)]
-  #if target is higher, ratio is low and there is more potential to increase
-  #creates value between 0 and 1; subtract that from 1 and then have neg value when yield > target
-  #select 0 when target is met - creates graph where when yield is low, the measure importance is high
 
-  d3[, sSOC := pmax(0, 1 - (1 + dSOC) * soc_ref/soc_target)]
-
-  #opposite function for N (most simple) but we might adapt this
-  d3[, sNsu := pmax(0, 1 + (1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit))]
+  # for yield and SOC
+  d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
+  d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
+  d3[, sNsu := pmax(0,1 - (1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit))]
 
   # update progress bar
   if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
