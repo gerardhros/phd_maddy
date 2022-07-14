@@ -30,10 +30,14 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   # make local copy
   d2 <- copy(db)
 
+  # add fraction of no-till area that overlaps with reduced till
+  d2[,fr_rtnt := pmin(1,sum(parea.rtct,na.rm = T) / sum( parea.ntct,na.rm=T)), by = ncu]
+  d2[is.na(fr_rtnt), fr_rtnt := 0]
+
   # subset only the integrator database columns needed to estimate DISTANCE TO TARGET
   # how far is initial status from desired status
   d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,yield_ref,yield_target,density,
-              soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu)]
+              soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu,fr_rtnt)]
 
   # re-arrange dt.m to facilitate joining with integrator data
   # create one line per NCU so everything moves back to columns
@@ -45,6 +49,15 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   # merge the impact of measures with the integrator db
   # get integrator data plus predicted changes per indicator and man code as col
   d3 <- merge(d2,dtm.mean,by=c('ncu'),allow.cartesian = TRUE)
+
+  # correct effects for overlapping treatments, area correction on NCU level
+  d3[man_code == "RT-CT" ,mmean_Nsu := mmean_Nsu * (1 - fr_rtnt)]
+  d3[man_code == "RT-CT" ,mmean_SOC := mmean_SOC * (1 - fr_rtnt)]
+  d3[man_code == "RT-CT" ,mmean_Y := mmean_Y * (1 - fr_rtnt)]
+  d3[man_code == "NT-CT" ,mmean_Nsu := mmean_Nsu * fr_rtnt]
+  d3[man_code == "NT-CT" ,mmean_SOC := mmean_SOC * fr_rtnt]
+  d3[man_code == "NT-CT" ,mmean_Y := mmean_Y * fr_rtnt]
+
   # allow cartesian because we are joining 1 NCU to many measures and normally it is 1:1
   # have 1 NCU, x# of crops, duplicated for each measure
 
