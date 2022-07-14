@@ -15,17 +15,13 @@
   # load functions for aggregation and optimisation DST
   source('scripts/dst_functions.r')
 
+  # location of data objects not stored on github
+  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
 #################################################################################################
 #   DOWNSCALING AREAL DISTRIBUTION OF MANAGEMENT STRATEGIES FROM EUROSTAT TO NCU LEVEL
 #################################################################################################
 
-  # here we join the integrator data with data from EU database for rotation
-
-  #________________________________________________
-  #     d1 = full NCU data with crop names and site properties
-  #     ncu_nuts_id = unique combo NCU and all NUTS levels
-  #________________________________________________
   # merge NCU data with given NUTS based on country and ncu
   d3 <- merge.data.table(d1,
                          ncu_nuts_id,
@@ -34,20 +30,12 @@
                          all.x = TRUE ,
                          all.y = FALSE)
 
-  #________________________________________________
-  #     ????So there are extra areas in INTEGRATOR data not covered by Eurostat data that are then reduced to match?
-  #________________________________________________
   # add a country dependent correction factor for area per NCU
   d3[,ncu_areacountry := sum(area_ncu),by=.(ncu,NUTS2)] #total of each ncu type matched at NUTS2 level
   d3[,ncu_areacountrycf := ncu_areacountry / sum(area_ncu),by=.(ncu,country)] #divide by total of ncu type at country level
 
   # adapt the area of the ncu
   d3[, area_ncu := ncu_areacountrycf * area_ncu]
-
-
-  #________________________________________________
-  #     add NUTS level areas for each management practice
-  #________________________________________________
 
   # join with EU database - LATER TILLAGE AND SOIL COVER SHOULD BE ADDED #310,418
   d3 <- merge(d3,d2.arable,by.x = 'NUTS2',by.y='nuts_code',all.x=TRUE)
@@ -64,8 +52,8 @@
   # join likelyhood continous cropping to the ncu database
   d3 <- merge(d3,lkh.crop,by='crop_name',all.x=TRUE)
 
-  # 4501
-  d3 <- subset(d3,country == 'BE')
+  # subset for testing purposes
+  # d3 <- subset(d3,country == 'BE')
 
   ############################## calculate the area continuous cropping ##############################
 
@@ -87,7 +75,6 @@
   # what is total NCU crop area already under crop rotation (in ha), summing over different categories
   d3[, rot_area_tot := rot_area_cont * 0 + rot_area_cr25 * 0.125 + rot_area_cr50 * 0.375 +
        rot_area_cr75 * 0.625 + rot_area_cr100 * 0.875]
-
 
   # remove columns no longer needed
   cols <- c('area_arable_rot','area_rot_cont', 'area_rot_25', 'area_rot_50', 'area_rot_75', 'area_rot_100', 'area_rot_na',
@@ -113,13 +100,9 @@
   d3[,c('sum_rot','test_rot','lh.rot','area_mon','rot_area_tot') := NULL]
 
 
+############################## calculate the soil cover area ######################################
 
-    ############################## calculate the soil cover area ######################################
-
-    #________________________________________________
-    #     add NUTS level areas for each management practice
-    #________________________________________________
-    #corrects soil cover columns so that the totals do not go over total cover given by EUROSTAT?
+    # corrects soil cover columns so that the totals do not go over total cover given by EUROSTAT?
     d3[,area_arable_cov_sum := area_cov_bare + area_cov_cover + area_cov_per + area_cov_res + area_cov_winter +area_cov_excl]
     cols <- colnames(d3)[grepl('^area_cov', colnames(d3))]
     d3[,c(cols) := lapply(.SD,function(x) x * area_arable_cov_sum / area_arable_cov), .SDcols = cols]
@@ -172,8 +155,6 @@
 # ADD LIKELIHOODS TILLAGE BASED ON correlation with CROPPING PRACTICES
 # -----------------------------------------------------------------------------------------------
 
-
-
     # join likelyhood continous cropping to the ncu database
     d4 <- merge(d3,lkh.till[,.(crop_name,lh.ctill = lh)],by='crop_name',all.x=TRUE)
 
@@ -203,19 +184,15 @@
           'area_win', 'area_cov' ,  'area_res',  'area_per', 'area_bar','area_exc', 'area_ncl') := NULL]
 
 
-    # -----------------------------------------------------------------------------------------------
-    # calculate fertilizer strategy (moving all grassland potential organic manure to arable)
-    # -----------------------------------------------------------------------------------------------
-
-
+# -----------------------------------------------------------------------------------------------
+# calculate fertilizer strategy (moving all grassland potential organic manure to arable)
+# -----------------------------------------------------------------------------------------------
 
     # how much organic manure is available on grassland within a NUTS region
+    # ***** THIS CAN ACTUALLY BE ADAPTED WITH TOTAL PERMANENT GRASSLAND FROM EUROSTAT ?? ****
     # n_man = N inputs from manure
     d4[, n_man_nuts := fifelse(grepl('grassland|Gras',crop_name),n_man,0)] #select manure N only from grassland
     d4[, n_man_nuts := sum(n_man_nuts,na.rm = TRUE),by = NUTS2] #sum over NUTS2 region
-    #_________________________________________________
-    # permanent grassland in Eurostat also available
-    #_________________________________________________
 
     # this amount might be adapted to the volume produced in stables
     # so correct for grazing (see e.g. Eurostat); a relative fraction of total applied
@@ -274,48 +251,5 @@
     d4[,cov_fert := paste0('f',cov_fert)]
     d4[,cov_soc := paste0('c',cov_soc)]
 
-    fwrite(d4,'M:/My Documents/6 DST final/Data/R-inputs/db_final_europe.csv')
-
-# #################################################################################################
-# #   CONNECT TO META-ANALYTICAL DATA
-# #################################################################################################
-
-    # remove data
-    rm(list=ls())
-
-    # load functions for aggregation and optimisation DST
-    source('M:/My Documents/6 DST final/Data/R-inputs/210805 dst functions.r')
-
-    # read in the earlier saved database from integrator
-    d1 <- fread('M:/My Documents/6 DST final/Data/R-inputs/db_final_europe.csv')
-
-    # load the default meta-analytical models
-    # function lmam cleans up the MA database and calculates weighted means and their variance
-    ma_models <- lmam(fname = 'M:/My Documents/6 DST final/Data/R-inputs/MA models template AGEE.xlsx')
-
-    # join MA-impact models per management measure
-    # function is run separately for each practice
-    dt.m1 <- cIMAm(management='CC',db = d1, mam = ma_models)
-    dt.m2 <- cIMAm(management='RES',db = d1, mam = ma_models)
-    dt.m3 <- cIMAm(management='ROT',db = d1, mam = ma_models)
-    dt.m4 <- cIMAm(management='NT-CT',db = d1, mam = ma_models)
-    dt.m5 <- cIMAm(management='RT-CT',db = d1, mam = ma_models)
-    dt.m6 <- cIMAm(management='CF-MF',db = d1, mam = ma_models)
-    dt.m7 <- cIMAm(management='OF-MF',db = d1, mam = ma_models)
-
-    # combine all measures and their impacts into one data.table
-    #all columns for the 88000 row database created for each indicato rbinded as rows
-    dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7)
-
-    #now have all inputs for final DST calculation; all possible models are there
-    #from here we take a smart combination of these different predictions in that DB
-
-    # run a DST simulation
-    sim1 <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE)
-
-    # do you want to run Monte Carlo Simulations?
-    sim2 <- runMC_DST(db = d1,mam = ma_models, nsim = 3, covar = TRUE,simyear = 5,
-                      uw = c(1,1,1),
-                      measures = c('CC','RES','ROT','NT-CT','RT-CT','CF-MF','OF-MF'),
-                      output = 'all')
-
+    # save file as csv
+    fwrite(d4,paste0(floc,'db_final_europe.csv'))
