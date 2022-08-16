@@ -15,179 +15,227 @@
 #'  "score_long_combi" gives the integrative score per combination measure, as a long table
 #'  "score_wide_combi" gives the integrative score per measure, as a wide table
 #'
+#'  the uw input argument is always in the order yield, soc and nitrogen surplus.
+#'
 #'  @export
 runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5, quiet = TRUE){
 
-            #input is combo of 2 previously created datasets (itnegrator/eurostat + meta-models)
-            # output sums over indicators or over one measure
-            # user weights are defined here in order of Y, C, N (e.g. 2 is twice as important as 1)
-            # simyear = time period over which we look at impacts / predicted changes
-            # so C can continue to increase linearly whereas Y and N do not - so adds complexity and we could pick one simyear
 
-  # make progress bar to know how the run time - at different points in the function it is updated while running
-  if(!quiet) {pb <- txtProgressBar(min = 0, max = 8, style = 3);i=0}
+  # ---- PREPROCESS INPUT DATABASE ------
 
-  # make local copy
+  # make local copy of the INTEGRATOR database
   d2 <- copy(db)
 
-  # add fraction of no-till area that overlaps with reduced till
+  # add fraction of no-till area that overlaps with reduced till (both measures can not be applied simultanously)
   d2[,fr_rtnt := pmin(1,sum(parea.rtct,na.rm = T) / sum( parea.ntct,na.rm=T)), by = ncu]
   d2[is.na(fr_rtnt), fr_rtnt := 0]
 
-  # subset only the integrator database columns needed to estimate DISTANCE TO TARGET
-  # how far is initial status from desired status
+  # subset only the columns needed to estimate the DISTANCE TO TARGET for Yield, SOC and N surplus
   d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,yield_ref,yield_target,density,
               soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu,fr_rtnt)]
 
-  # re-arrange dt.m to facilitate joining with integrator data
-  # create one line per NCU so everything moves back to columns
+  # re-arrange the table with MA models (object dt.m) to facilitate joining with integrator data
   dtm.mean <- dcast(dt.m,ncu + man_code ~ indicator, value.var = c('mmean','msd'))
 
-  # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
-
-  # merge the impact of measures with the integrator db
-  # get integrator data plus predicted changes per indicator and man code as col
+  # merge the impact of measures from the MA models with the integrator db by NCU
   d3 <- merge(d2,dtm.mean,by=c('ncu'),allow.cartesian = TRUE)
 
-  # correct effects for overlapping treatments, area correction on NCU level
-  d3[man_code == "RT-CT" ,mmean_Nsu := mmean_Nsu * (1 - fr_rtnt)]
-  d3[man_code == "RT-CT" ,mmean_SOC := mmean_SOC * (1 - fr_rtnt)]
-  d3[man_code == "RT-CT" ,mmean_Y := mmean_Y * (1 - fr_rtnt)]
-  d3[man_code == "NT-CT" ,mmean_Nsu := mmean_Nsu * fr_rtnt]
-  d3[man_code == "NT-CT" ,mmean_SOC := mmean_SOC * fr_rtnt]
-  d3[man_code == "NT-CT" ,mmean_Y := mmean_Y * fr_rtnt]
+    # correct effects for overlapping treatments, area correction on NCU level
+    d3[man_code == "RT-CT" ,mmean_Nsu := mmean_Nsu * (1 - fr_rtnt)]
+    d3[man_code == "RT-CT" ,mmean_SOC := mmean_SOC * (1 - fr_rtnt)]
+    d3[man_code == "RT-CT" ,mmean_Y := mmean_Y * (1 - fr_rtnt)]
+    d3[man_code == "NT-CT" ,mmean_Nsu := mmean_Nsu * fr_rtnt]
+    d3[man_code == "NT-CT" ,mmean_SOC := mmean_SOC * fr_rtnt]
+    d3[man_code == "NT-CT" ,mmean_Y := mmean_Y * fr_rtnt]
 
-  # allow cartesian because we are joining 1 NCU to many measures and normally it is 1:1
-  # have 1 NCU, x# of crops, duplicated for each measure
-
-  # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
-
-  # add estimated change in indicators for a period of 20 years
-  # changes only relevant for SOC over years so simyear for others set as constant at 1
-  # becomes fraction instead of % like in models
-  d3[, dY := 1 * mmean_Y * 0.01]
+  # add estimated change in indicators for a period of X years (given as argument simyear)
+  # calculates as percentage change (from the ML models) in yield, SOC and N surplus
+  d3[, dY := mmean_Y * 0.01]
   d3[, dSOC := simyear * mmean_SOC * 0.01]
-  d3[, dNsu := 1 * mmean_Nsu * 0.01]
+  d3[, dNsu := mmean_Nsu * 0.01]
 
-  # prevent that the change in SOC due to manure input exceeds available C
+  # prevent that the change in SOC due to manure input exceeds available C (kg ha-1 * 1000/ kg soil ha-1 = g C / kg soil * 0.1 = % SOC)
   d3[grepl('^CF|^OF', man_code) & dSOC > 0, dSOC := pmin(dSOC, c_man_ncu * 1000 *.1/(100 * 100 *.25 * density))]
-  #filter rows for fert measures; where C is increasing; take min of predicted change and amount C avail in manure
-  #****check kg/ha to mg/kg conversion
 
-  # DISTANCE TO TARGET APPROACH
-  # add score reflecting distance to given target, being a linear function
+  # ---- estimate DISTANCE TO TARGET APPROACH -----
 
-  # for yield and SOC
+  # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
   d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
   d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
   d3[, sNsu := pmax(0,1 - (1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit))]
 
+  # estimate the mean impact per NCU given the area coverage with crops
+  d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu)]
+  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu',colnames(d3))]
+  d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
+
+  # ---- estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION -----
+
+     # create a set with all combinations of measures
+
+      # what are the available measures (man_code)
+      measures <- unique(d3$man_code)
+
+      # make a data.table with all possible combinations of the measures
+      meas.combi <- do.call(CJ,replicate(length(measures),measures,FALSE))
+
+      # add an unique ID per measurement combi (including duplicates)
+      meas.combi[,cid := .I]
+
+      # melt the data.table to facilitatie calculations per NCU per measurement combi
+      meas.combi <- melt(meas.combi,id.vars ='cid',variable.name = 'measure')
+
+      # remove duplicates
+      meas.combi <- unique(meas.combi, by = c('cid','value'))
+
+      # create an expontential number to enable unique som of individual measures
+      nfc <- 10^(1:length(measures))
+
+      # add an unique value for each measure
+      meas.combi[,value2 := nfc[as.factor(value)]]
+
+      # sum the total values of the measures (so that each measure combination has an unique code)
+      meas.combi[,value3 := sum(value2),by=cid]
+
+      # add an unique ID for each unique measure combination
+      meas.combi[,cgid := .GRP,by=.(value,value3)]
+
+      # remove duplicates
+      meas.combi <- unique(meas.combi,by = 'cgid')
+
+      # update the unique ID per measurement combi
+      meas.combi[,cgid := .GRP,by=.(value3)]
+
+      # select only the relvant columns
+      meas.combi <- meas.combi[,.(cgid,man_code = value)]
+
+    # make an unique table with each combination of measures per unique ID
+    dt.meas.combi <- meas.combi[,list(man_code = paste(man_code,collapse = '-'),
+                                      man_n = .N
+                                      ),by='cgid']
+
+    # combine all measurement combinations per NCU
+    dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
+
+  # ---- CALCULATE SCORES AND MEASURE ORDER  -----
+
+    # this is done in subsets, to avoid huge RAM usage and to enhance speed
+
+    # define output list to store results
+    dt.out <- list()
+
+    # make progress bar to know how the run time - at different points in the function it is updated while running
+    if(!quiet) {pb <- txtProgressBar(min = 0, max = 1199, style = 3);j=0}
+
+    # make a sequence to split the database
+    ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 600)))
+
+    # what is the calculated impact, done in subsets to enhance speed and avoid huge RAM usage
+    for(i in 2:4){ #length(ncu_steps)){
+
+      # select the row numbers to subset
+      ncu_min <- ncu_steps[i-1]
+      ncu_max <- ncu_steps[i]
+
+      # subset the dataset
+      dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
+
+      # add random noise to avoid same rank for measures with similar impacts
+      cols <- c('sY','sSOC','sNsu','dY','dSOC','dNsu')
+      dt.ss[, c(cols) := lapply(.SD, function(x)  pmax(x,1e-3) * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
+
+      # add a relative score for the impact of each measure, sorted on their impact on the indicator (highest impact = lowest rank)
+      dt.ss[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by=.(ncu,cgid)]
+
+      # update progress bar
+      if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
+
+      # add order per NCI and per measure combination (cgid), so that most impactfull measure has rank 1
+      dt.ss[, c('fY','fSOC','fNsu') := lapply(.SD,function(x) frankv(x,order=-1)),.SDcols = c('sY','sSOC','sNsu'),by=.(ncu,cgid)]
+
+      # update progress bar
+      if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
+
+      # estimate the change in indicators due to the measures taken, and estimate the change in the integral score for three indicators together
+      dt.ss2 <- dt.ss[, list(bipmc = (sum(uw[1] * sY/fY,na.rm = T) +
+                                      sum(uw[2] * sSOC/fSOC,na.rm = T) +
+                                      sum(uw[3] * sNsu / fNsu,na.rm=T)) / sum(uw),
+                             dY = sum(dY/odY),
+                             dSOC = sum(dSOC/odSOC),
+                             dNsu = sum(dNsu/oNsu)),
+                      by=.(ncu,cgid)]
+
+      # add a ranking based on the integral score
+      dt.ss2[,bipmcs := as.integer(frankv(bipmc)),by=ncu]
+
+      # add the measurures taken
+      dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
+
+      # save into a list
+      dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dSOC,dNsu,bipmcs)])
+
+    }
+
+    dt.out <- rbindlist(dt.out)
+
+
+  # ---- OUTPUT DATA COLLECTION ----
+
+  # collect relevant output for case that all measures have been applied
+  if(sum(grepl('total_impact|all',output))>0){
+
+    # select relevant data and sort
+    pout1 <- dt.out[man_n == 7,.(ncu,man_code,dY,dSOC,dNsu)]
+    setorder(pout1,ncu)
+  } else {pout1 = NULL}
+
+  # collect relevant output for case that only best measure (or combination of measures) have been applied
+  if(sum(grepl('best_impact|all',output))>0){
+
+    # select relevant data and sort
+    pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dSOC,dNsu)]
+    setorder(pout2,ncu)
+  } else {pout2 = NULL}
+
+  # collect the order of the single measures given their contribution to improve indicators
+  if(sum(grepl('score_single|all',output))>0){
+
+    # select relevant data and sort
+    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs)][,bipmcs := frankv(bipmcs),by=ncu]
+    # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
+    pout3 <- dcast(pout3,ncu~man_code,value.var = 'bipmcs')
+  } else {pout3 = NULL}
+
+  # collect the order of duo combinations of measures given their contribution to improve indicators
+  if(sum(grepl('score_duo|all',output))>0){
+
+    # select relevant data and sort
+    pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs)][,bipmcs := frankv(bipmcs),by=ncu]
+    # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
+    pout4 <- dcast(pout4,ncu~man_code,value.var = 'bipmcs')
+  } else {pout4 = NULL}
+
+  # collect the order of the single measures given their contribution to improve indicators
+  if(sum(grepl('score_best|all',output))>0){
+
+    # select relevant data and sort
+    pout5 <- dt.out[bipmcs==1,.(ncu,man_code)]
+    setorder(pout5,ncu)
+  } else {pout5 = NULL}
+
+
   # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
-
-  # average the impact of measures and scores over crop types to get area weighted mean per ncu
-  d4 <- copy(d3)[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu)]
-  cols <- colnames(d4)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu',colnames(d4))]
-  d4 <- d4[,lapply(.SD,function(x) weighted.mean(x,area_ncu)),.SDcols = cols,by=c('ncu','man_code')]
-
-  # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
-
-  if(output=='total_impact'|output=='all'){
-
-        #combination of the measures - sum impact of all over each indicator (without site/user weighting)
-
-    # RELATED TO DIMINISHING ADDITIVE EFFECT WHEN MULTIPLE MEASURES APPLIED TOGETHER (UNLIKLY TO BE MAX ADDITIVE WHEN ALTOGETHER)
-    # estimate the total impact of all measures combined (be aware, the change is a fraction)
-    # Using a simple weighting factor where the additive contribution declines with the
-    # order of the measure when sorted from highest to lowest impact
-    # output is relative change (in %) over a x-year period (given by simyear)
-    d4[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by='ncu']
-    # still aggregated weighted avg but fraction form
-    out1 <- d4[,list(dY = sum(dY/odY), dSOC = sum(dSOC/odSOC),dNsu = sum(dNsu/oNsu)),by = 'ncu']
-
-
-
-  }
-  # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
-
-    #now summing over each individual measure with site and user weights integrated ; results in rank of measures
-
-  #SINGLE MEASURES - ORDERED
-  #sorting/ranking of measures per NCU
-  #depends how far from target ; also how important each individual indicator is (user weight)
-  if((grepl('score', output) & !grepl('combi$',output))|output=='all'){
-
-    # estimate the integrative score per measure, and sort them on importance
-    # the lower the score, the better the measure helps to reach desired targets
-    #weighted avg of a measure (uw) - still coming out bw 0-1
-    #distance for each indicator can come out as 2x the other, etc.
-    d4[,bipm := uw[1] * sY + uw[2] * sSOC + uw[3] * sNsu / sum(uw)]
-    #orders each measure (positive now)
-    d4[,bipms := as.integer(frankv(bipm)),by='ncu']
-    #adds the measure and ranking
-    out2 <- d4[,.(ncu,man_code,bipms)]
-    #here 2 measures can have identical ranking
-
-    #SCORE ENDS UP VALUE FROM 0-1; EACH MEASURE GETS A RANK COMPARED TO OTHERS (LIKE OUTCOME PAPER 1)
-
-  }
-  # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
-
-  #what combinations of measures are best or worst when applied together (including )
-
-  #GERARD ADAPTS SO THAT SOME COMBINATIONS CANNOT TAKE PLACE (RT/NT), AND TO ALLOW FOR MORE THAN 2 MEASURES COMBINED
-  #might look at what needed to achieve targets yes/no (e.g. does adding more measures actually reach goals?)
-
-  #DIFFERENT COMBINATIONS OF MEASURES - ORDERED - ONLY MAX 2 AT ONCE RATHER THAN MORE - BUT WE CAN ADAPT THIS TO REALISTIC COMBO
-  if((grepl('score', output) & grepl('combi$',output))|output=='all'){
-
-    #collect score columns
-    cols <- colnames(d4)[grepl('^s|man|ncu',colnames(d4))]
-    #merge with itself to get combos of measures (listed in cols) so here 7x7
-    d4 <- merge(d4[,mget(cols)],d4[,mget(cols)],by='ncu',allow.cartesian = T, suffixes = c('_m1','_m2'))
-    #only selecting m1-m2, etc not m1-m1
-    d4 <- d4[man_code_m1 != man_code_m2]
-    #changing names of man to number/code
-    d4[,man_code_fm1 := as.numeric(as.factor(man_code_m1))]
-    d4[,man_code_fm2 := as.numeric(as.factor(man_code_m2))]
-    #removes duplicates by changing names between columns and then removing second row
-    d4[,c('c1','c2') := list(pmax(man_code_fm1,man_code_fm2),pmin(man_code_fm1,man_code_fm2)),by=c('man_code_fm1','man_code_fm2')]
-    d4 <- unique(d4,by=c('ncu','c1','c2'))
-    #remove temporary cols
-    d4[,c('c1','c2','man_code_fm1','man_code_fm2') := NULL]
-
-    #first sort each measure because diminishing impacts for added measures
-    #highest one counts 100% second 50%
-    #then what is change in dist to target for each ind
-    d4[,bipmc := (uw[1] * (pmax(sY_m1,sY_m2) + pmin(sY_m1,sY_m2)*0.5) +
-                    uw[3] * (pmax(sNsu_m1,sNsu_m2) + pmin(sNsu_m1,sNsu_m2)*0.5) +
-                    uw[2] * (pmax(sSOC_m1,sSOC_m2) + pmin(sSOC_m1,sSOC_m2)*0.5))/sum(uw)]
-    #ranks different combinations on the total integrated score for all 3 indicators
-    d4[,bipmcs := as.integer(frankv(bipmc)),by='ncu']
-    #adding col to identify combo of measures
-    d4[,mcombi := paste0(man_code_m1,'_',man_code_m2)]
-    #table with ncu, man name, ranking; might add combined score as well (bipmc)
-    out3 <- d4[,.(ncu,mcombi,bipmcs)]
-
-  }
-  # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i)}
+  if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
   # select relevant output to be returned
-  if(output == 'total_impact'){out <- out1}
-  if(output == 'score_long'){out <- out2}
-  if(output == 'score_wide'){out <- dcast(out2,ncu ~ man_code,value.var = 'bipms')}
-  if(output == 'score_long_combi'){out <- out3}
-  if(output == 'score_wide_combi'){out <- dcast(out3,ncu ~ mcombi,value.var = 'bipmcs')}
-  if(output == 'all'){out <- list(total_impact = out1, score_long = out2, score_long_combi = out3)}
+  out < list(impact_total = pout1,
+             impact_best = pout2,
+             score_single = pout3,
+             score_duo = pout4,
+             score_best = pout5)
 
   # update progress bar
-  if(!quiet) {i = i+1; setTxtProgressBar(pb, i);close(pb)}
+  if(!quiet) {j = j+1; setTxtProgressBar(pb, j);close(pb)}
 
   # return output
   return(out)
