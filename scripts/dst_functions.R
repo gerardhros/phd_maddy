@@ -4,21 +4,22 @@
 #' @param dt.m (data.table) a data.table containing the meta-analytical estimates for Y, Nsu and SOC per management
 #' @param uw (vector) (user weight) is an argument that gives the relative importance for yield, soc or n-surplus (a value above 0, likely a fraction between 0 and 2). Default is c(1,1,1).
 #' @param simyear (num) value for the default year for simulation of impacts (default is 5 years)
-#' @param output (string) optional argument to select different types of outputs. Options include: 'total impact', 'score_long','score_wide','score_long_combi', or 'score_wide_combi', or 'all'.
+#' @param output (string) optional arguments to select different types of outputs. Options include: 'total_impact','best_impact','score_single','score_due','score_best' or 'all'.
 #' @param quiet (boolean) option to show progress bar to see progress of the function
+#' @param nmax (integer) the max number of measure combinations evaluated
 #'
 #' @details
 #'  run the optimizer with the following options for output:
-#'  "total_impact" gives the total change in SOC, Nsp and yield for all measures combined
-#'  "score_long" gives the integrative score per measure, as a long table
-#'  "score_wide" gives the integrative score per measure, as a wide table
-#'  "score_long_combi" gives the integrative score per combination measure, as a long table
-#'  "score_wide_combi" gives the integrative score per measure, as a wide table
+#'  'total_impact' gives the total change in SOC, Nsp and yield for all measures combined
+#'  'best_impact' gives the total change in SOC, Nsp and yield for the best combination of measures applied
+#'  'score_single' gives the order of all single measures how they contribute to reach to desired target for yield, SOC and N surplus
+#'  'score_due' gives the order of all measures combinations how they contribute to reach to desired target for yield, SOC and N surplus
+#'  'score_best' gives the best measures combinations to reach to desired target for yield, SOC and N surplus
 #'
 #'  the uw input argument is always in the order yield, soc and nitrogen surplus.
 #'
 #'  @export
-runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5, quiet = TRUE){
+runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL){
 
 
   # ---- PREPROCESS INPUT DATABASE ------
@@ -76,8 +77,11 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
       # what are the available measures (man_code)
       measures <- unique(d3$man_code)
 
+      # what is the desired number of allowed combinations of measures
+      if(is.null(nmax)){nmax = length(measures)}
+
       # make a data.table with all possible combinations of the measures
-      meas.combi <- do.call(CJ,replicate(length(measures),measures,FALSE))
+      meas.combi <- do.call(CJ,replicate(nmax,measures,FALSE))
 
       # add an unique ID per measurement combi (including duplicates)
       meas.combi[,cid := .I]
@@ -131,7 +135,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 600)))
 
     # what is the calculated impact, done in subsets to enhance speed and avoid huge RAM usage
-    for(i in 2:4){ #length(ncu_steps)){
+    for(i in 2:length(ncu_steps)){
 
       # select the row numbers to subset
       ncu_min <- ncu_steps[i-1]
@@ -185,7 +189,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   if(sum(grepl('total_impact|all',output))>0){
 
     # select relevant data and sort
-    pout1 <- dt.out[man_n == 7,.(ncu,man_code,dY,dSOC,dNsu)]
+    pout1 <- dt.out[man_n == max(man_n),.(ncu,man_code,dY,dSOC,dNsu)]
     setorder(pout1,ncu)
   } else {pout1 = NULL}
 
@@ -207,7 +211,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   } else {pout3 = NULL}
 
   # collect the order of duo combinations of measures given their contribution to improve indicators
-  if(sum(grepl('score_duo|all',output))>0){
+  if(sum(grepl('score_duo|all',output))>0 & nmax >= 2){
 
     # select relevant data and sort
     pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs)][,bipmcs := frankv(bipmcs),by=ncu]
@@ -228,7 +232,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
   # select relevant output to be returned
-  out < list(impact_total = pout1,
+  out <- list(impact_total = pout1,
              impact_best = pout2,
              score_single = pout3,
              score_duo = pout4,
