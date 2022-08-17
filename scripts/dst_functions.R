@@ -254,13 +254,14 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 #' @param mam (list) a list containing the generic meta-analytical model information
 #' @param simyear (num) value for the default year for simulation of impacts (default is 5 years)
 #' @param covar (boolean) is it desired to make use of the ma-models including covariates. Options: TRUE/FALSE.
-#' @param output (string) optional argument to select different types of outputs. Options include: 'total impact', 'score_long','score_wide','score_long_combi', or 'score_wide_combi', or 'all'.
+#' @param output (string) optional arguments to select different types of outputs. Options include: 'total_impact','best_impact','score_single','score_due','score_best' or 'all'.
+#' @param nmax (integer) the max number of measure combinations evaluated
 #'
 #' @export
 runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
                       measures = c('CC','RES','ROT','NT-CT','RT-CT','CF-MF','OF-MF'),
                       mam = ma_models, nsim = 10, covar = TRUE,
-                      output = 'all'){
+                      output = 'all',nmax = 2){
 
   #we can adapt nsim later to be what needed (at least 100 but needs a lot of time)
   #output is the different options in runDST
@@ -269,12 +270,13 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
   d1.rmc <- copy(db)
 
   # make list to store output of join MA- impact models per management measure as well ass Monte Carlo simulations
-  dt.list = sim.list = sim.list1 = sim.list2 = sim.list3 = list()
+  dt.list = sim.list = sim.list1 = sim.list2 = sim.list3 = sim.list4 = sim.list5 = list()
 
   # function to calculate the model
   #table is counting frequency of occurance within a column
   #stores the most frequent option
   fmod <- function(x) as.integer(names(sort(table(x),decreasing = T)[1]))
+  fmods <- function(x) names(sort(table(x),decreasing = T)[1])
 
   # make progress bar
   pb <- txtProgressBar(min = 0, max = nsim, style = 3)
@@ -284,7 +286,6 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
 
     dt.list = list()
 
-
     # join MA-impact models per management measure (those defined above in measures)
     # cIMAm gives different output each time if mc set to true; here running various sims
     # list of separate data tables per measure
@@ -293,18 +294,21 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
     # combine all measures and their impacts into one data.table
     dt.m <- rbindlist(dt.list)
 
-    sim <- runDST(db = d1.rmc, dt.m = dt.m, output = output,uw = uw,simyear = simyear,quiet = TRUE)
+    sim <- runDST(db = d1.rmc, dt.m = dt.m, output = output,uw = uw,simyear = simyear,
+                  quiet = FALSE, nmax = nmax)
 
     # ?? CHECKING 1 NCU sim$total_impact[ncu==1830]
 
     #adding column with sim number
     if(output !='all'){
-      sim.list[[i]] <- copy(sim)[,sim:=i]
+      sim.list[[i]] <- copy(sim$impact_total)[,sim:=i]
     } else {
       #if you want all, multiple outputs each in a list
-      sim.list1[[i]] <- sim$total_impact[,sim:=i]
-      sim.list2[[i]] <- sim$score_long[,sim:=i]
-      sim.list3[[i]] <- sim$score_long_combi[,sim:=i]
+      sim.list1[[i]] <- sim$impact_total[,sim:=i]
+      sim.list2[[i]] <- sim$impact_best[,sim:=i]
+      sim.list3[[i]] <- sim$score_single[,sim:=i]
+      sim.list4[[i]] <- sim$score_duo[,sim:=i]
+      sim.list5[[i]] <- sim$score_best[,sim:=i]
     }
 
     # update progress bar (just for simulation)
@@ -316,19 +320,26 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
   if(output !='all'){
     out <- rbindlist(sim.list)
   } else{
-    #summarizing the output and finding most frequent ranking
+    #summarizing the outputs
     out1 <- rbindlist(sim.list1)
-    #scores
-    out1 <- out1[,as.list(unlist(lapply(.SD,function(x) list(mean = mean(x), sd = sd(x))))),.SDcols = c('dY','dSOC','dNsu'),by=ncu]
+    out1 <- out1[,list(dYmean = mean(dY), dSOCmean = mean(dSOC),dNsumean = mean(dNsu),
+                       dYsd = sd(dY),dSOCsd = sd(dSOC), dNsusd = sd(dNsu)), by= .(ncu,man_code)]
     out2 <- rbindlist(sim.list2)
-    #ind measures
-    out2 <- out2[, .(modal = fmod(bipms)),by=c('ncu','man_code')]
+    out2 <- out2[,list(dYmean = mean(dY), dSOCmean = mean(dSOC),dNsumean = mean(dNsu),
+                       dYsd = sd(dY),dSOCsd = sd(dSOC), dNsusd = sd(dNsu)), by= .(ncu,man_code)]
     out3 <- rbindlist(sim.list3)
-    #combo of measures
-    out3 <- out3[, .(modal = fmod(bipmcs)),by=c('ncu','mcombi')]
+    out3 <- out3[,lapply(.SD,fmod),by=ncu]
+    out4 <- rbindlist(sim.list4)
+    out4 <- out4[,lapply(.SD,fmod),by=ncu]
+    out5 <- rbindlist(sim.list5)
+    out5 <- out5[, list(modal := fmods(man_code)),by=c('ncu')]
 
-    #combine all output
-    out <- list(total_impact = out1, score_long = out2, score_long_combi = out3)
+    # combine all output
+    out <- list(impact_total = out1,
+                impact_best = out2,
+                score_single = out3,
+                score_duo = out4,
+                score_best = out5)
   }
 
   # close progressbar
