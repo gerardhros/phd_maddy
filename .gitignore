@@ -2,3 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+*.tif
+*.jpg
+*.png
+*.asc
+*.rds
