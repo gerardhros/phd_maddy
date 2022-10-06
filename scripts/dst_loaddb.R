@@ -1,3 +1,7 @@
+
+#LOADING ORIGINAL INTEGRATOR/EUROSTAT DATABASES AND LIKELIHOODS
+#OUTPUTS USED IN DST PREPARE INPUT
+
 #################################################################################################
 #                       LOAD DATA: INTEGRATOR, CROP LIKELIHOODS
 #################################################################################################
@@ -8,12 +12,13 @@
 #________________________________________________
 
 # settings
+  rm(list=ls())
 
   # require packages
   require(data.table); require(readxl)
 
   # location of data objects not stored on github
-  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+  floc <- 'C:/dst_outputs/'
 
 
 # load database to link NCU to NUTS levels
