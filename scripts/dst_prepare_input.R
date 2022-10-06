@@ -1,4 +1,6 @@
 
+# only integration of INTEGRATOR/
+
 #################################################################################################
 #   DEVELOPMENT DECISION SUPPORT TOOL MANAGEMENT-IMPACT ACROSS EUROPE
 #################################################################################################
@@ -16,7 +18,7 @@
   source('scripts/dst_functions.r')
 
   # location of data objects not stored on github
-  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+  floc <- 'C:/dst_outputs/'
 
 #################################################################################################
 #   DOWNSCALING AREAL DISTRIBUTION OF MANAGEMENT STRATEGIES FROM EUROSTAT TO NCU LEVEL
