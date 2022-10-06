@@ -1,7 +1,10 @@
 # Functions to run DST of Maddy
 
-#' @param db (data.table) a data.table with INTEGRATOR data used for the DST
-#' @param dt.m (data.table) a data.table containing the meta-analytical estimates for Y, Nsu and SOC per management
+#Parameters to define as input when calling runDST
+#data tables are imported in dst_main
+
+#' @param db (data.table) a data.table of INTEGRATOR/EUROSTAT data
+#' @param dt.m (data.table) a data.table of meta-analytical estimates for Y, Nsu and SOC per management and ncu
 #' @param uw (vector) (user weight) is an argument that gives the relative importance for yield, soc or n-surplus (a value above 0, likely a fraction between 0 and 2). Default is c(1,1,1).
 #' @param simyear (num) value for the default year for simulation of impacts (default is 5 years)
 #' @param output (string) optional arguments to select different types of outputs. Options include: 'total_impact','best_impact','score_single','score_due','score_best' or 'all'.
@@ -12,87 +15,115 @@
 #'  run the optimizer with the following options for output:
 #'  'total_impact' gives the total change in SOC, Nsp and yield for all measures combined
 #'  'best_impact' gives the total change in SOC, Nsp and yield for the best combination of measures applied
-#'  'score_single' gives the order of all single measures how they contribute to reach to desired target for yield, SOC and N surplus
-#'  'score_due' gives the order of all measures combinations how they contribute to reach to desired target for yield, SOC and N surplus
-#'  'score_best' gives the best measures combinations to reach to desired target for yield, SOC and N surplus
+#'  'score_single' gives the order of all single measures by how they contribute to reaching desired targets for indicators
+#'  'score_due' gives the order of all combinations of measures by how they contribute to reaching desired targets
+#'  'score_best' gives the best combination to reach desired targets
 #'
-#'  the uw input argument is always in the order yield, soc and nitrogen surplus.
+#'  the uw input argument is always in the order of (1) yield, (2) soc and (3) N surplus.
 #'
-#'  @export
+#'  @export ??
+
+
+# # copy here inputs to run line-by-line, then run each line within the function rather than calling it
+# db = d1
+# dt.m = dt.m
+# output = 'total_impact'
+# uw = c(2,1,1)
+# simyear = 5
+# quiet = FALSE
+# nmax=1
+
 runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL){
 
 
   # ---- PREPROCESS INPUT DATABASE ------
 
-  # make local copy of the INTEGRATOR database
+  # make local copy of the INTEGRATOR/Eurostat database
   d2 <- copy(db)
 
-  # add fraction of no-till area that overlaps with reduced till (both measures can not be applied simultanously)
+  # add fraction for potential no-till area that overlaps with reduced till (both cannot be applied simultaneously)
+  # assume that the potential corresponds to the proportion of NT/RT already applied (in NUTS2 zone)
   d2[,fr_rtnt := pmin(1,sum(parea.rtct,na.rm = T) / sum( parea.ntct,na.rm=T)), by = ncu]
   d2[is.na(fr_rtnt), fr_rtnt := 0]
+  # if RT is more than NT, the fraction is 1
 
   # subset only the columns needed to estimate the DISTANCE TO TARGET for Yield, SOC and N surplus
   d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,yield_ref,yield_target,density,
               soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu,fr_rtnt)]
 
-  # re-arrange the table with MA models (object dt.m) to facilitate joining with integrator data
+  # re-arrange the table of MA models (object dt.m) to facilitate joining with integrator data
   dtm.mean <- dcast(dt.m,ncu + man_code ~ indicator, value.var = c('mmean','msd'))
 
   # merge the impact of measures from the MA models with the integrator db by NCU
   d3 <- merge(d2,dtm.mean,by=c('ncu'),allow.cartesian = TRUE)
 
-    # correct effects for overlapping treatments, area correction on NCU level
+    # correct effects for overlapping treatments via area correction on NCU level
     d3[man_code == "RT-CT" ,mmean_Nsu := mmean_Nsu * (1 - fr_rtnt)]
     d3[man_code == "RT-CT" ,mmean_SOC := mmean_SOC * (1 - fr_rtnt)]
     d3[man_code == "RT-CT" ,mmean_Y := mmean_Y * (1 - fr_rtnt)]
+    #as RT increases in proportion to NT, the impact of new RT is reduced
+    #MORE RT = IMPACTS OF NEW RT ARE REDUCED BECAUSE NOT AS MUCH CAN BE APPLIED
+    #SO THE POTENTIAL FOR NEW RT IS LOWER WHEN A LOT IS ALREADY APPLIED
+    #OR IS IT THE OTHER WAY AROUND BECAUSE WE ASSUME THE SAME RATE OF ADOPTION IN NEW AREAS?
+
     d3[man_code == "NT-CT" ,mmean_Nsu := mmean_Nsu * fr_rtnt]
     d3[man_code == "NT-CT" ,mmean_SOC := mmean_SOC * fr_rtnt]
     d3[man_code == "NT-CT" ,mmean_Y := mmean_Y * fr_rtnt]
+    #MORE NT = IMPACTS OF NEW NT REDUCED BECAUSE WE ASSUME RT MORE LIKELY
+    #OVERALL IMPACTS AT THE NCU LEVEL ARE ADJUSTED ACCORDINGLY
 
   # add estimated change in indicators for a period of X years (given as argument simyear)
-  # calculates as percentage change (from the ML models) in yield, SOC and N surplus
+  # simyear is only relevant for SOC where results are cumulative
+  # converts from percentage change (from the ML models) to multiplied factor for yield, SOC and N surplus
   d3[, dY := mmean_Y * 0.01]
   d3[, dSOC := simyear * mmean_SOC * 0.01]
   d3[, dNsu := mmean_Nsu * 0.01]
 
   # prevent that the change in SOC due to manure input exceeds available C (kg ha-1 * 1000/ kg soil ha-1 = g C / kg soil * 0.1 = % SOC)
+  # select combined and organic measures where SOC change is greater than zero
+  # take the minimum between that and the max amount of C that can decompose from the available manure
   d3[grepl('^CF|^OF', man_code) & dSOC > 0, dSOC := pmin(dSOC, c_man_ncu * 1000 *.1/(100 * 100 *.25 * density))]
 
   # ---- estimate DISTANCE TO TARGET APPROACH -----
 
   # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
+  # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
   d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
   d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
   d3[, sNsu := pmax(0,1 - (1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit))]
 
-  # estimate the mean impact per NCU given the area coverage with crops
-  d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu)]
-  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu',colnames(d3))]
+  # estimate overall impact per measure & NCU given the different area coverage based on crop types
+  # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
+  d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu)] #subset
+  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu',colnames(d3))] #store col names
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
 
   # ---- estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION -----
 
      # create a set with all combinations of measures
 
-      # what are the available measures (man_code)
-      measures <- unique(d3$man_code)
+      # what is the list of available measures (man_code)
+      measures <- unique(d3$man_code) # 7 measures
 
+      nmax=2
       # what is the desired number of allowed combinations of measures
+      # when nmax=1, no combo allowed, nmax=2 means 2 measures can be applied together, etc.
       if(is.null(nmax)){nmax = length(measures)}
 
       # make a data.table with all possible combinations of the measures
+      # when combo is 2, meas^2 = 7x7 = 49 options, etc.
       meas.combi <- do.call(CJ,replicate(nmax,measures,FALSE))
 
-      # add an unique ID per measurement combi (including duplicates)
+      # add an unique ID per measure combi (including duplicates)
       meas.combi[,cid := .I]
 
-      # melt the data.table to facilitatie calculations per NCU per measurement combi
+      # melt the data.table to facilitate calculations per NCU per measure combi
       meas.combi <- melt(meas.combi,id.vars ='cid',variable.name = 'measure')
 
       # remove duplicates
       meas.combi <- unique(meas.combi, by = c('cid','value'))
 
-      # create an expontential number to enable unique som of individual measures
+      # create an exponential number to enable unique sum of individual measures
       nfc <- 10^(1:length(measures))
 
       # add an unique value for each measure
@@ -121,6 +152,8 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     # combine all measurement combinations per NCU
     dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
 
+    # ???? what is happening with the data melt and the V1/V2
+
   # ---- CALCULATE SCORES AND MEASURE ORDER  -----
 
     # this is done in subsets, to avoid huge RAM usage and to enhance speed
@@ -134,6 +167,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     # make a sequence to split the database
     ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 600)))
 
+    # predefine i=1, or 2 etc. then can run line by line
     # what is the calculated impact, done in subsets to enhance speed and avoid huge RAM usage
     for(i in 2:length(ncu_steps)){
 
@@ -154,12 +188,14 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
       # update progress bar
       if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
-      # add order per NCI and per measure combination (cgid), so that most impactfull measure has rank 1
+      # add order per NCU and per measure combination (cgid), so that most impactful measure has rank 1
       dt.ss[, c('fY','fSOC','fNsu') := lapply(.SD,function(x) frankv(x,order=-1)),.SDcols = c('sY','sSOC','sNsu'),by=.(ncu,cgid)]
 
       # update progress bar
       if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
+      # combined measures not additive
+      # highest score counts 100, second 50, third 33, etc
       # estimate the change in indicators due to the measures taken, and estimate the change in the integral score for three indicators together
       dt.ss2 <- dt.ss[, list(bipmc = (sum(uw[1] * sY/fY,na.rm = T) +
                                       sum(uw[2] * sSOC/fSOC,na.rm = T) +
@@ -169,10 +205,11 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
                              dNsu = sum(dNsu/oNsu)),
                       by=.(ncu,cgid)]
 
-      # add a ranking based on the integral score
+      # add a ranking based on the integral score for each ncu
+      # also for all combinations
       dt.ss2[,bipmcs := as.integer(frankv(bipmc)),by=ncu]
 
-      # add the measurures taken
+      # add the measures taken
       dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
 
       # save into a list
@@ -180,10 +217,14 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
     }
 
+    # converts the list into a table (rowbind)
     dt.out <- rbindlist(dt.out)
 
 
   # ---- OUTPUT DATA COLLECTION ----
+
+    #DT.OUT is always used which CONTAINS ALL DATA AND FILTERING/AGGREGATING/ADAPTING TO WHAT OUTPUT WE WANT
+    # get familiar with dt.out structure to adapt these lines myself
 
   # collect relevant output for case that all measures have been applied
   if(sum(grepl('total_impact|all',output))>0){
@@ -194,6 +235,8 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   } else {pout1 = NULL}
 
   # collect relevant output for case that only best measure (or combination of measures) have been applied
+    #WHICHEVER HAS BEST IMPACT GIVEN DISTANCE TO TARGET AND USER IMPORTANCE
+    #ADAPTATION EXAMPLE - WHAT IS "THEORETICAL MAXIMUM"
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
@@ -202,6 +245,8 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   } else {pout2 = NULL}
 
   # collect the order of the single measures given their contribution to improve indicators
+    # output such as in paper 1 - simple ranking of individual measures
+    # filtering by single measures
   if(sum(grepl('score_single|all',output))>0){
 
     # select relevant data and sort
@@ -214,12 +259,16 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   if(sum(grepl('score_duo|all',output))>0 & nmax >= 2){
 
     # select relevant data and sort
+    #SELECT NO. OF MEASURES 2; SELECT COLUMNS; OVERWRITE COLUMN BIPMCS (ORDER OF ALL COMBO MEASURES)
+    #SO MAKING A SUBSET OF THIS BASED ON A CRITERIA; THEN RECALCULATE THE ORDER BASED ON "MISSING RANK VALUES"
     pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
     pout4 <- dcast(pout4,ncu~man_code,value.var = 'bipmcs')
   } else {pout4 = NULL}
 
   # collect the order of the single measures given their contribution to improve indicators
+    # filtering based on impact (bipmcs)
+    #MEANT TO BE SAME AS POUT4 BUT FOR BEST COMBO
   if(sum(grepl('score_best|all',output))>0){
 
     # select relevant data and sort
@@ -258,6 +307,9 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 #' @param nmax (integer) the max number of measure combinations evaluated
 #'
 #' @export
+
+# RUNNING DST A SET NUMBER OF TIMES AND GENERATING ERROR OF MEAN OUTPUT (BASED ON VARIANCE OF INPUTS)
+# DEFAULTS SET HERE BUT CAN ADAPT WHEN RUNNING IN IN DST MAIN
 runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
                       measures = c('CC','RES','ROT','NT-CT','RT-CT','CF-MF','OF-MF'),
                       mam = ma_models, nsim = 10, covar = TRUE,
@@ -275,6 +327,7 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
   # function to calculate the model
   #table is counting frequency of occurance within a column
   #stores the most frequent option
+  #FOR CATEGORICAL VARIABLES BECAUSE NO NUMERIC VALUE. HOW OFTEN ARE EACH RANKED HIGHEST, ETC.
   fmod <- function(x) as.integer(names(sort(table(x),decreasing = T)[1]))
   fmods <- function(x) names(sort(table(x),decreasing = T)[1])
 
@@ -358,7 +411,16 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
 #' @param montecarlo (boolean) is it desired to make use of MC estimates of the ma-model estimates. Options: TRUE/FALSE.
 #'
 #' @export
+
+# management='CC'
+# db = d1
+# mam = ma_models
+# montecarlo = FALSE
+# covar = TRUE
+
 cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar = TRUE){
+
+  #STILL NEED EFFECT OF FERTILIZER VERSUS NO FERTILIZER SO THIS MIGHT AFFECT THE CODE
 
   # select the right column for the area
   # one of the following 7 measures is selected when running the function
