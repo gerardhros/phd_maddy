@@ -36,13 +36,13 @@
 
 
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-# db = d1
-# dt.m = dt.m
-# output = 'total_impact'
-# uw = c(1,1,1)
-# simyear = 5
-# quiet = FALSE
-# nmax=1
+db = d1
+dt.m = dt.m
+output = 'total_impact'
+uw = c(1,1,1)
+simyear = 5
+quiet = FALSE
+nmax=1
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
 
@@ -106,6 +106,10 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
   d3[, sNsu := pmax(0,1 - (1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit))]
 
+  # there are cases where the critical N surplus is missing.
+  # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
+  d3[is.na(sNsu), sNsu := 1]
+
   #EASILY REPLACE WITH s=1 to check outcomes without these functions
   #for results do not adapt the function itself
 
@@ -113,6 +117,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   d3[, dist_Y := yield_ref / yield_target ]
   d3[, dist_C := soc_ref / soc_target ]
   d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+  d3[is.na(dist_N), dist_N := 1]
 
   #*** ================
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
@@ -205,8 +210,14 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
 
     # add random noise to avoid same rank for measures with similar impacts
+
     # introduces 2-3% variation around value
     cols <- c('sY','sSOC','sNsu','dY','dSOC','dNsu')
+
+    dt.ss[sY == 0, sY := 1e-4]
+    dt.ss[sNsu == 0, sNsu := 1e-4]
+    dt.ss[sSOC == 0, sSOC := 1e-4]
+
     dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
     # HERE NEGATIVE VALUES (Nsu) GET REPLACED WITH VERY SMALL NUMBERS
     # removed pmax(x,1e-3)
