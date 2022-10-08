@@ -42,8 +42,8 @@ world <- ne_countries(scale = "medium", returnclass = "sf")
 
 # plot a basic world map plot
 p1 <- ggplot(data = world) + geom_sf(color = "black", fill = "gray92") +
-    geom_tile(data = r1.p,aes(x=x,y=y,fill= improvement)) +
-    scale_fill_viridis_c()+ theme_void() +
+    # geom_tile(data = r1.p,aes(x=x,y=y,fill= improvement)) +
+    # scale_fill_viridis_c()+ theme_void() +
     theme(legend.position = 'bottom') +
     xlab("Longitude") + ylab("Latitude") +
     ggtitle("World map", subtitle = "Mean change for scenario 1") +
@@ -54,13 +54,21 @@ ggsave(plot = p1, filename = 'products/nue_effect_s1.jpg')
 # plot source data to understand spatial patterns
 
   # get the raster to plot crops
-  r1 <- terra::rast('data/ma_crops.tif')
+  r1 <- terra::rast('C:/phd_maddy/products/output.2a.tif')
   r1.p <- as.data.frame(r1,xy=TRUE)
-  r1.p$total = (r1.p$RICE + r1.p$MAIZ + r1.p$other + r1.p$wheat)/1000
-  ggplot(data = world) + geom_sf(color = "black", fill = "gray92") +
-        geom_raster(data = r1.p,aes(x=x,y=y,fill= total)) +
-        scale_fill_viridis_c()+ theme_void() +
-        theme(legend.position = 'bottom')
+  # r1.p$total = (r1.p$RICE + r1.p$MAIZ + r1.p$other + r1.p$wheat)/1000
+  # ggplot(data = world) + geom_sf(color = "black", fill = "gray92") +
+  p1 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dY)) + #changing fill= whatever col to plot
+        scale_fill_viridis_c()+
+    # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+        theme(legend.position = 'bottom')+
+    xlab("Longitude") + ylab("Latitude") +
+    ggtitle("World map", subtitle = "Mean change for scenario 1") +
+    coord_sf(crs = 4326) + theme_bw()
+
+  ggsave(plot = p1, filename = 'C:/phd_maddy/products/output.2a2.jpg')
+
 
   # get the raster to plot MAT
   r1 <- terra::rast('data/climate.tif')

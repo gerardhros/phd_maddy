@@ -35,14 +35,14 @@
 #'  @export ??
 
 
-# # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-db = d1
-dt.m = dt.m
-output = 'total_impact'
-uw = c(2,1,1)
-simyear = 5
-quiet = FALSE
-nmax=1
+# # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
+# db = d1
+# dt.m = dt.m
+# output = 'total_impact'
+# uw = c(1,1,1)
+# simyear = 5
+# quiet = FALSE
+# nmax=1
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
 
@@ -69,6 +69,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
   # merge the impact of measures from the MA models with the integrator db by NCU
   d3 <- merge(d2,dtm.mean,by=c('ncu'),allow.cartesian = TRUE)
+
 
   # correct effects for overlapping treatments via area correction on NCU level
   d3[man_code == "RT-CT" ,mmean_Nsu := mmean_Nsu * (1 - fr_rtnt)]
@@ -113,6 +114,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   d3[, dist_C := soc_ref / soc_target ]
   d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
 
+  #*** ================
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
   # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
   d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
@@ -187,10 +189,11 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
   # make a sequence to split the database
   # YOU CAN ADAPT INTO LARGER LENGTH.OUT IF NEEDED FOR COMPUTER MEMORY
+  # CHANGE "0" TO MIN(DT$NCU) TO TEST FOR LOOP BELOW
   ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 600)))
 
   # predefine i=1, or 2 etc. then can run line by line
-  # what is the calculated impact, done in subsets to enhance speed and avoid huge RAM usage
+  # impacts calculated in subsets to enhance speed and avoid huge RAM usage
   # i=2
   for(i in 2:length(ncu_steps)){
 
@@ -202,8 +205,11 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
 
     # add random noise to avoid same rank for measures with similar impacts
+    # introduces 2-3% variation around value
     cols <- c('sY','sSOC','sNsu','dY','dSOC','dNsu')
-    dt.ss[, c(cols) := lapply(.SD, function(x)  pmax(x,1e-3) * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
+    dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
+    # HERE NEGATIVE VALUES (Nsu) GET REPLACED WITH VERY SMALL NUMBERS
+    # removed pmax(x,1e-3)
 
     # add a relative score for the impact of each measure, sorted on their impact on the indicator (highest impact = lowest rank)
     dt.ss[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by=.(ncu,cgid)]
@@ -231,6 +237,8 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
                            dist_N=dist_N[1]),
                     by=.(ncu,cgid)]
 
+    #***, ================
+
     # add a ranking based on the integral score for each ncu
     # also for all combinations
     dt.ss2[,bipmcs := as.integer(frankv(bipmc)),by=ncu]
@@ -238,8 +246,10 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     # add the measures taken
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
 
+
+    #*** ================
     # save into a list
-    dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,bipmcs)])
+    dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs)])
 
   }
 
@@ -266,8 +276,10 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   #ADAPTATION EXAMPLE - WHAT IS "THEORETICAL MAXIMUM"
   if(sum(grepl('best_impact|all',output))>0){
 
+    #*** ================
+    #
     # select relevant data and sort
-    pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dSOC,dNsu)]
+    pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
@@ -339,15 +351,15 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 # DEFAULTS SET HERE BUT CAN ADAPT WHEN RUNNING IN IN DST MAIN
 
 # for troubleshooting
-db = d1
-mam = ma_models
-nsim = 1
-covar = FALSE
-simyear = 5
-uw = c(1,1,1)
-measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP')
-output = 'all'
-nmax=3
+# db = d1
+# mam = ma_models
+# nsim = 1
+# covar = FALSE
+# simyear = 5
+# uw = c(1,1,1)
+# measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP')
+# output = 'all'
+# nmax=3
 
 runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
                       measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),

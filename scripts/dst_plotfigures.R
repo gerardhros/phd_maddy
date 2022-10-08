@@ -58,7 +58,7 @@ r1.p <- as.data.table(r1.p)
 # ========================================================
 
 # join/merge output.2a  with r1.p
-r.ncu <- merge(r1.p, output.2a, by.x = 'gncu2010_ext', by.y = 'ncu')
+r.ncu <- merge(r1.p, output2, by.x = 'gncu2010_ext', by.y = 'ncu')
 
 #make man codes numeric
 r.ncu[man_code == 'CF-MF' , man_num := 1]
@@ -69,10 +69,10 @@ r.ncu[man_code == 'RFT' , man_num := 5]
 r.ncu[man_code == 'RFP' , man_num := 6]
 
 # set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext', 'man_num' , 'dY', 'dSOC', 'dNsu', 'man_code'))
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
-terra::writeRaster(r.fin,'products/output.2a.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/output2.tif', overwrite = TRUE)

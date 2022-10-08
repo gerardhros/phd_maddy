@@ -34,7 +34,7 @@ d1 <- fread(paste0(floc,'db_final_europe.csv'))
 
 # load the default meta-analytical models AND covariate models
 # creates a list of objects --grand mean man (7) - grand SD-cov means (58) - cov SDs--
-ma_models <- lmam(fname = 'data/mmc2_fert_meas.xlsx')
+ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas.xlsx')
 
 # join MA impact models for fertiliser measures (specific to IFS conference paper)
 # outcome: ncu / area meas. / indicator / meas. code / mean change / SD
@@ -53,6 +53,20 @@ dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
 # run a DST simulation, varying the max number of combinations
 
+# adapting random noise function to absolute value for negative impacts: abs(x)
+# NA models have 0.001 and 0.001 for mean and sd - putting back to normal calculations for N
+sim1 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output1 <- sim1$impact_best
+# CF-MF  EE   OF-MF   RFP   RFR   RFT
+# 195    217  15860  11328  1308   80
+#28,987
+
+#testing the adaptation - with new functions there are missing NCUs
+sim2 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output2 <- sim2$impact_best
+
+
+
 # total_impact gives all outcomes/combinations possible per ncu and the outcome on each indicator
 # number of rows changes by number of practices = longer when more combinations are possible
 sim1a <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
@@ -68,8 +82,8 @@ output.1c <- sim1c$impact_total
 sim2a <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
 output.2a <- sim2a$impact_best
 
-sim2a.dist <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output.2a.dist <- sim2a.dist$impact_best
+
+
 
 sim2b <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=5)
 output.2b <- sim2b$impact_best
