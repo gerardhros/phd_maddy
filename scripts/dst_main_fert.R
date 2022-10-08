@@ -34,7 +34,7 @@ d1 <- fread(paste0(floc,'db_final_europe.csv'))
 
 # load the default meta-analytical models AND covariate models
 # creates a list of objects --grand mean man (7) - grand SD-cov means (58) - cov SDs--
-ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas.xlsx')
+ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0_1.xlsx')
 
 # join MA impact models for fertiliser measures (specific to IFS conference paper)
 # outcome: ncu / area meas. / indicator / meas. code / mean change / SD
@@ -49,84 +49,114 @@ dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models)
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
-
-
-# run a DST simulation, varying the max number of combinations
-
-# adapting random noise function to absolute value for negative impacts: abs(x)
-# NA models have 0.001 and 0.001 for mean and sd - putting back to normal calculations for N
-sim1 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output1 <- sim1$impact_best
-# CF-MF  EE   OF-MF   RFP   RFR   RFT
-# 195    217  15860  11328  1308   80
-#28,987
-
-#testing the adaptation - with new functions there are missing NCUs
-sim2 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output2 <- sim2$impact_best
-
-
-
-# total_impact gives all outcomes/combinations possible per ncu and the outcome on each indicator
-# number of rows changes by number of practices = longer when more combinations are possible
-sim1a <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output.1a <- sim1a$impact_total
-sim1b <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=5)
-output.1b <- sim1b$impact_total
-sim1c <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
-output.1c <- sim1c$impact_total
-
-# best_impact gives one single best measure, 1 row per NCU
-# 3 impacts listed (empty for SOC and Nsu)
-# at first the best was only RFP when missing models were NA, regardless of varying the parameters
-sim2a <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output.2a <- sim2a$impact_best
-
-
-
-
-sim2b <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=5)
-output.2b <- sim2b$impact_best
-sim2c <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
-output.2c <- sim2c$impact_best
-
-
-# score_single gives ranking of all measures, each one as an individual column
-# no impacts listed
-# nmax only changes the result slightly most likely due to the small random error
-sim3a<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output.3a <- sim3a$score_single
-sim3b<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
-output.3b <- sim3b$score_single
-
-#testing Uw parameters
-sim3c<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,10,1),simyear = 5,quiet = FALSE,nmax=1)
-output.3c <- sim3c$score_single
-
-sim3d<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(10,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output.3d <- sim3d$score_single
-
-sim3e<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,10),simyear = 5,quiet = FALSE,nmax=1)
-output.3e <- sim3e$score_single
-
-
-# score_duo gives ranking of each pair combo of measures (2 max) as a column
-sim4a<- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
-output.4a <- sim4a$score_duo
-sim4b<- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=4)
-output.4b <- sim4b$score_duo
-# changing nmax still only returns 2 measures combined, again with different results due to the random error
-
-# score_best seems the same as "best_impact" but only 2 col's (no impacts per indicator copied)
-sim5a<- runDST(db = d1, dt.m = dt.m, output = 'score_best',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
-output.5a <- sim5a$score_best
-sim5b<- runDST(db = d1, dt.m = dt.m, output = 'score_best',uw = c(0,10,1),simyear = 5,quiet = FALSE,nmax=1)
-output.5b <- sim5a$score_best
-
-
 # do you want to run Monte Carlo Simulations?
+# Note - 'best_impact' is the string  input for impact_best
 sim.MC <- runMC_DST(db = d1,mam = ma_models, nsim = 1, covar = FALSE,simyear = 5,
                   uw = c(1,1,1),
                   measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
-                  output = 'all', nmax=3)
-output.MC <-
+                  output = 'all', nmax=1)
+
+# run a DST simulation, varying the max number of combinations
+
+#replace missing models with 0.001 and 0.001
+sim1 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output1 <- sim1$impact_best
+# CF-MF EE  OF-MF   RFP   RFR   RFT
+# 532   427 15588  11110  1412   407
+
+#replace missing models with 0.000001 and 100
+sim5 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output5 <- sim5$impact_best
+# CF-MF    EE OF-MF   RFP   RFR   RFT
+# 505   470 15619 11065  1417   400
+
+#prioritize N - Not much effect
+sim2 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,10),simyear = 5,quiet = FALSE,nmax=1)
+output2 <- sim2$impact_best
+# CF-MF  EE  OF-MF   RFP    RFR    RFT
+# 553   445  14798   12252  1045   383
+
+#replace missing models with 0
+sim3 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output3 <- sim3$impact_best
+# CF-MF   EE   OF-MF   RFP   RFR   RFT
+# 4532   1164   160    193    51   23376
+
+#replace missing models with NA
+sim4 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output4 <- sim4$impact_best
+# CF-MF  EE    OF-MF   RFP   RFR   RFT
+# 4400   1122   148    186   58   23562
+
+#replace missing models with NA and change NaN dX output to 0
+sim6 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output6 <- sim6$impact_best
+# CF-MF   EE   OF-MF   RFP   RFR   RFT
+# 11170   476   157   162   2531   14980
+
+
+
+
+
+
+
+#
+# # total_impact gives all outcomes/combinations possible per ncu and the outcome on each indicator
+# # number of rows changes by number of practices = longer when more combinations are possible
+# sim1a <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
+# output.1a <- sim1a$impact_total
+# sim1b <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=5)
+# output.1b <- sim1b$impact_total
+# sim1c <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
+# output.1c <- sim1c$impact_total
+#
+# # best_impact gives one single best measure, 1 row per NCU
+# # 3 impacts listed (empty for SOC and Nsu)
+# # at first the best was only RFP when missing models were NA, regardless of varying the parameters
+# sim2a <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
+# output.2a <- sim2a$impact_best
+#
+#
+#
+#
+# sim2b <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=5)
+# output.2b <- sim2b$impact_best
+# sim2c <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
+# output.2c <- sim2c$impact_best
+#
+#
+# # score_single gives ranking of all measures, each one as an individual column
+# # no impacts listed
+# # nmax only changes the result slightly most likely due to the small random error
+# sim3a<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
+# output.3a <- sim3a$score_single
+# sim3b<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
+# output.3b <- sim3b$score_single
+#
+# #testing Uw parameters
+# sim3c<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,10,1),simyear = 5,quiet = FALSE,nmax=1)
+# output.3c <- sim3c$score_single
+#
+# sim3d<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(10,1,1),simyear = 5,quiet = FALSE,nmax=1)
+# output.3d <- sim3d$score_single
+#
+# sim3e<- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,10),simyear = 5,quiet = FALSE,nmax=1)
+# output.3e <- sim3e$score_single
+#
+#
+# # score_duo gives ranking of each pair combo of measures (2 max) as a column
+# sim4a<- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
+# output.4a <- sim4a$score_duo
+# sim4b<- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=4)
+# output.4b <- sim4b$score_duo
+# # changing nmax still only returns 2 measures combined, again with different results due to the random error
+#
+# # score_best seems the same as "best_impact" but only 2 col's (no impacts per indicator copied)
+# sim5a<- runDST(db = d1, dt.m = dt.m, output = 'score_best',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=2)
+# output.5a <- sim5a$score_best
+# sim5b<- runDST(db = d1, dt.m = dt.m, output = 'score_best',uw = c(0,10,1),simyear = 5,quiet = FALSE,nmax=1)
+# output.5b <- sim5a$score_best
+
+
+
+

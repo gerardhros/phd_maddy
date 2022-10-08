@@ -36,13 +36,13 @@
 
 
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-db = d1
-dt.m = dt.m
-output = 'total_impact'
-uw = c(1,1,1)
-simyear = 5
-quiet = FALSE
-nmax=1
+# db = d1
+# dt.m = dt.m
+# output = 'total_impact'
+# uw = c(1,1,1)
+# simyear = 5
+# quiet = FALSE
+# nmax=1
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
 
@@ -97,6 +97,11 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   # select combined and organic measures where SOC change is greater than zero
   # take the minimum between that and the max amount of C that can decompose from the available manure
   d3[grepl('^CF|^OF', man_code) & dSOC > 0, dSOC := pmin(dSOC, c_man_ncu * 1000 *.1/(100 * 100 *.25 * density))]
+
+  # *** adaptation for missing/ NA models
+  d3[is.na(dY),dY := 0]
+  d3[is.na(dSOC),dSOC := 0]
+  d3[is.na(dNsu),dSOC := 0]
 
   # ---- estimate DISTANCE TO TARGET APPROACH -----
 
@@ -417,14 +422,15 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
 
     #adding column with sim number
     if(output !='all'){
-      sim.list[[i]] <- copy(sim$impact_total)[,sim:=i]
+      #impact_best is currently the results used
+      sim.list[[i]] <- copy(sim$impact_total)[,sim=i]
     } else {
       #if you want all, multiple outputs each in a list
-      sim.list1[[i]] <- sim$impact_total[,sim:=i]
-      sim.list2[[i]] <- sim$impact_best[,sim:=i]
-      sim.list3[[i]] <- sim$score_single[,sim:=i]
-      sim.list4[[i]] <- sim$score_duo[,sim:=i]
-      sim.list5[[i]] <- sim$score_best[,sim:=i]
+      sim.list1[[i]] <- sim$impact_total[,sim=i]
+      sim.list2[[i]] <- sim$impact_best[,sim=i]
+      sim.list3[[i]] <- sim$score_single[,sim=i]
+      sim.list4[[i]] <- sim$score_duo[,sim=i]
+      sim.list5[[i]] <- sim$score_best[,sim=i]
     }
 
     # update progress bar (just for simulation)
@@ -692,8 +698,17 @@ lmam <- function(fname){
   m2.cov.sd <- dcast(m2.covar, man_code + mods + group ~ ind_code, value.var = 'wm.sd')
   setnames(m2.cov.sd,colnames(m2.cov.sd)[-c(1:3)],paste0('sd_',colnames(m2.cov.sd)[-c(1:3)]))
 
-  # add the meta-analytical models into one list
-  out = list(ma_mean = m2.mean, ma_sd = m2.sd,ma_cov_mean = m2.cov.mean, ma_cov_sd = m2.cov.sd)
+  # Monte Carlo requires SD values, which are missing for covariates
+  # Here I tried to remove them to see if that
+  # if (covar==FALSE) {
+  #   # add the meta-analytical models into one list
+  #   out = list(ma_mean = m2.mean, ma_sd = m2.sd)
+  #
+  # } else {
+    # add the meta-analytical models into one list
+    out = list(ma_mean = m2.mean, ma_sd = m2.sd,ma_cov_mean = m2.cov.mean, ma_cov_sd = m2.cov.sd)
+  # }
+
 
   # return
   return(out)
