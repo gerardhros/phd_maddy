@@ -369,7 +369,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 # for troubleshooting
 # db = d1
 # mam = ma_models
-# nsim = 1
+# nsim = 4
 # covar = FALSE
 # simyear = 5
 # uw = c(1,1,1)
@@ -426,11 +426,11 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
       sim.list[[i]] <- copy(sim$impact_total)[,sim=i]
     } else {
       #if you want all, multiple outputs each in a list
-      sim.list1[[i]] <- sim$impact_total[,sim=i]
-      sim.list2[[i]] <- sim$impact_best[,sim=i]
-      sim.list3[[i]] <- sim$score_single[,sim=i]
-      sim.list4[[i]] <- sim$score_duo[,sim=i]
-      sim.list5[[i]] <- sim$score_best[,sim=i]
+      sim.list1[[i]] <- sim$impact_total[,sim :=i]
+      sim.list2[[i]] <- sim$impact_best[,sim :=i]
+      sim.list3[[i]] <- sim$score_single[,sim :=i]
+      sim.list4[[i]] <- sim$score_duo[,sim :=i]
+      sim.list5[[i]] <- sim$score_best[,sim :=i]
     }
 
     # update progress bar (just for simulation)
