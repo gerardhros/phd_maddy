@@ -375,7 +375,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 # uw = c(1,1,1)
 # measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP')
 # output = 'all'
-# nmax=3
+# nmax=1
 
 runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
                       measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
@@ -457,7 +457,7 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
     out3 <- rbindlist(sim.list3)
     out3 <- out3[,lapply(.SD,fmod),by=ncu]
     out4 <- rbindlist(sim.list4)
-    out4 <- out4[,lapply(.SD,fmod),by=ncu]
+    if(nrow(out4)>0){out4 <- out4[,lapply(.SD,fmod),by=ncu]}
     out5 <- rbindlist(sim.list5)
     out5 <- out5[, list(modal = fmods(man_code)),by=c('ncu')]
 
