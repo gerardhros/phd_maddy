@@ -26,8 +26,31 @@ theme_set(theme_bw())
 r1 <- terra::rast('products/gncu2010_ext.asc')
 
 # convert to data.frame
-r1.p <- as.data.frame(r1,xy=TRUE)
+# adding na.rm=F solves the following error, even though the map not affected
+# Error in x$.self$finalize() : attempt to apply non-function
+r1.p <- as.data.frame(r1,xy=TRUE,na.rm=FALSE)
 r1.p <- as.data.table(r1.p)
+
+r.ncu <- merge(r1.p, output6, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# make man codes numeric
+### try later ###
+# better is to replace this part of code by r.ncu[, man_num := as.numeric(as.factor(man_code))]
+r.ncu[man_code == 'CF-MF' , man_num := 1]
+r.ncu[man_code == 'OF-MF' , man_num := 2]
+r.ncu[man_code == 'EE' , man_num := 3]
+r.ncu[man_code == 'RFR' , man_num := 4]
+r.ncu[man_code == 'RFT' , man_num := 5]
+r.ncu[man_code == 'RFP' , man_num := 6]
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/output1_test3.tif', overwrite = TRUE)
 
 # TEST 1 where missing models are NA
 # - saved as output 3a NA model
@@ -58,9 +81,11 @@ r1.p <- as.data.table(r1.p)
 # ========================================================
 
 # join/merge output.2a  with r1.p
-r.ncu <- merge(r1.p, output2, by.x = 'gncu2010_ext', by.y = 'ncu')
+r.ncu <- merge(r1.p, output1, by.x = 'gncu2010_ext', by.y = 'ncu')
 
-#make man codes numeric
+# make man codes numeric
+### try later ###
+# better is to replace this part of code by r.ncu[, man_num := as.numeric(as.factor(man_code))]
 r.ncu[man_code == 'CF-MF' , man_num := 1]
 r.ncu[man_code == 'OF-MF' , man_num := 2]
 r.ncu[man_code == 'EE' , man_num := 3]
@@ -73,6 +98,8 @@ setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','di
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
+#warning messages above showed up here
+
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
-terra::writeRaster(r.fin,'products/output2.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/output1_test.tif', overwrite = TRUE)
