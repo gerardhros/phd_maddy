@@ -118,7 +118,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
   # there are cases where the critical N surplus is missing.
   # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
-  d3[is.na(sNsu), sNsu := 1]
+  d3[is.na(sNsu), sNsu := 5]
 
   #EASILY REPLACE WITH s=1 to check outcomes without these functions
   #for results do not adapt the function itself
