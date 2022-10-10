@@ -50,9 +50,6 @@
 
 runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL){
 
-
-  # ---- PREPROCESS INPUT DATABASE ------
-
   # make local copy of the INTEGRATOR/Eurostat database
   d2 <- copy(db)
 
@@ -100,7 +97,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   # take the minimum between that and the max amount of C that can decompose from the available manure
   d3[grepl('^CF|^OF', man_code) & dSOC > 0, dSOC := pmin(dSOC, c_man_ncu * 1000 *.1/(100 * 100 *.25 * density))]
 
-  # *** adaptation for missing/ NA models
+  # adaptation for missing/ NA models
   d3[is.na(dY),dY := 0]
   d3[is.na(dSOC),dSOC := 0]
   d3[is.na(dNsu),dSOC := 0]
@@ -111,7 +108,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
   d3[is.na(dist_N), dist_N := 1]
 
-  # ---- estimate DISTANCE TO TARGET evaluation -----
+  # estimate DISTANCE TO TARGET evaluation
 
   # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
   # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
@@ -128,14 +125,13 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
 
 
-  #*** ================
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
   # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
   d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
   cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
 
-  # ---- estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION -----
+  # estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION
 
   # create a set with all combinations of measures
 
@@ -188,10 +184,10 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
   # combine all measurement combinations per NCU
   dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
-
   # ???? what is happening with the data melt and the V1/V2
 
-  # ---- CALCULATE SCORES AND MEASURE ORDER  -----
+
+  # CALCULATE SCORES AND MEASURE ORDER
 
   # this is done in subsets, to avoid huge RAM usage and to enhance speed
 
@@ -257,7 +253,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
                            dist_N=dist_N[1]),
                     by=.(ncu,cgid)]
 
-    #***, ================
+
 
     # add a ranking based on the integral score for each ncu
     # also for all combinations
@@ -267,7 +263,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
 
 
-    #*** ================
+
     # save into a list
     dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs)])
 
@@ -277,9 +273,9 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   dt.out <- rbindlist(dt.out)
 
 
-  # ---- OUTPUT DATA COLLECTION ----
+  # OUTPUT DATA COLLECTION
 
-  #DT.OUT is always used which CONTAINS ALL DATA AND FILTERING/AGGREGATING/ADAPTING TO WHAT OUTPUT WE WANT
+  # DT.OUT is always used which CONTAINS ALL DATA AND FILTERING/AGGREGATING/ADAPTING TO WHAT OUTPUT WE WANT
   # get familiar with dt.out structure to adapt these lines myself
 
   # collect relevant output for case that all measures have been applied
@@ -296,8 +292,6 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   #ADAPTATION EXAMPLE - WHAT IS "THEORETICAL MAXIMUM"
   if(sum(grepl('best_impact|all',output))>0){
 
-    #*** ================
-    #
     # select relevant data and sort
     pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
     setorder(pout2,ncu)

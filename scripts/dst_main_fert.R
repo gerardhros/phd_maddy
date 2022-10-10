@@ -55,16 +55,15 @@ output6 <- sim6$impact_best
 # CF-MF   EE   OF-MF   RFP   RFR   RFT
 # 11170   476   157   162   2531   14980
 
-
 #score_single
-# ncu+distYCN~bipmcs, value=man_code
+# ncu+dist_Y+dist_C+dist_N~bipmcs, value=man_code
 sim7 <- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 output7 <- sim7$score_single
 single_rank <- data.frame(rbind(table(output7$'CF-MF'), table(output7$'OF-MF'),
                                 table(output7$'EE'), table(output7$'RFR'),
                                 table(output7$'RFT'), table(output7$'RFP')))
 fwrite(single_rank,paste0(floc,'single_rank.csv'))
-#Rank 1
+# R1 (best measure)
 # CF-MF   EE   OF-MF   RFP    RFR    RFT
 # 527    453   15535   11105  1424   432
 
