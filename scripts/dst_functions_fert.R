@@ -374,13 +374,13 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 # for troubleshooting
 # db = d1
 # mam = ma_models
-# nsim = 1
+# nsim = 4
 # covar = FALSE
 # simyear = 5
 # uw = c(1,1,1)
 # measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP')
 # output = 'all'
-# nmax=3
+# nmax=1
 
 runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
                       measures = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
@@ -428,14 +428,19 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
     #adding column with sim number
     if(output !='all'){
       #impact_best is currently the results used
-      sim.list[[i]] <- copy(sim$impact_total)[,sim=i]
+      sim.list[[i]] <- copy(sim$impact_total)[,sim:=i]
     } else {
       #if you want all, multiple outputs each in a list
-      sim.list1[[i]] <- sim$impact_total[,sim=i]
-      sim.list2[[i]] <- sim$impact_best[,sim=i]
-      sim.list3[[i]] <- sim$score_single[,sim=i]
-      sim.list4[[i]] <- sim$score_duo[,sim=i]
-      sim.list5[[i]] <- sim$score_best[,sim=i]
+      sim.list1[[i]] <- sim$impact_total[,sim :=i]
+      sim.list2[[i]] <- sim$impact_best[,sim :=i]
+      sim.list3[[i]] <- sim$score_single[,sim :=i]
+      if(is.null(sim$score_duo)){
+        sim.list4[[i]] <- NULL
+      } else {
+        sim.list4[[i]] <- sim$score_duo[,sim :=i]
+      }
+
+      sim.list5[[i]] <- sim$score_best[,sim :=i]
     }
 
     # update progress bar (just for simulation)
@@ -457,7 +462,7 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
     out3 <- rbindlist(sim.list3)
     out3 <- out3[,lapply(.SD,fmod),by=ncu]
     out4 <- rbindlist(sim.list4)
-    out4 <- out4[,lapply(.SD,fmod),by=ncu]
+    if(nrow(out4)>0){out4 <- out4[,lapply(.SD,fmod),by=ncu]}
     out5 <- rbindlist(sim.list5)
     out5 <- out5[, list(modal = fmods(man_code)),by=c('ncu')]
 
