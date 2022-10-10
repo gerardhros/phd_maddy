@@ -423,13 +423,18 @@ runMC_DST <- function(db, uw = c(1,1,1),simyear = 5,
     #adding column with sim number
     if(output !='all'){
       #impact_best is currently the results used
-      sim.list[[i]] <- copy(sim$impact_total)[,sim=i]
+      sim.list[[i]] <- copy(sim$impact_total)[,sim:=i]
     } else {
       #if you want all, multiple outputs each in a list
       sim.list1[[i]] <- sim$impact_total[,sim :=i]
       sim.list2[[i]] <- sim$impact_best[,sim :=i]
       sim.list3[[i]] <- sim$score_single[,sim :=i]
-      sim.list4[[i]] <- sim$score_duo[,sim :=i]
+      if(is.null(sim$score_duo)){
+        sim.list4[[i]] <- NULL
+      } else {
+        sim.list4[[i]] <- sim$score_duo[,sim :=i]
+      }
+
       sim.list5[[i]] <- sim$score_best[,sim :=i]
     }
 
