@@ -114,7 +114,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
   d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
   d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
-  d3[, sNsu := pmax(0,1 - (1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit))]
+  d3[, sNsu := pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1)]
 
   # there are cases where the critical N surplus is missing.
   # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
@@ -222,7 +222,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     dt.ss[sY == 0, sY := 1e-4]
     dt.ss[sNsu == 0, sNsu := 1e-4]
     dt.ss[sSOC == 0, sSOC := 1e-4]
-
+    set.seed(123)
     dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
     # HERE NEGATIVE VALUES (Nsu) GET REPLACED WITH VERY SMALL NUMBERS
     # removed pmax(x,1e-3)
