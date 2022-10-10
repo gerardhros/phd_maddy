@@ -49,6 +49,39 @@ dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models)
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
+#replace missing models with NA and change NaN dX output to 0
+sim6 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output6 <- sim6$impact_best
+# CF-MF   EE   OF-MF   RFP   RFR   RFT
+# 11170   476   157   162   2531   14980
+
+
+#score_single
+# ncu+distYCN~bipmcs, value=man_code
+sim7 <- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output7 <- sim7$score_single
+single_rank <- data.frame(rbind(table(output7$'CF-MF'), table(output7$'OF-MF'),
+                                table(output7$'EE'), table(output7$'RFR'),
+                                table(output7$'RFT'), table(output7$'RFP')))
+fwrite(single_rank,paste0(floc,'single_rank.csv'))
+#Rank 1
+# CF-MF   EE   OF-MF   RFP    RFR    RFT
+# 527    453   15535   11105  1424   432
+
+# ncuN~man_code, value=bipmcs
+
+sim7b <- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output7b <- sim7b$score_single
+single_rank_b <- data.frame(rbind(table(output7b$'CF-MF'), table(output7b$'OF-MF'),
+                                table(output7b$'EE'), table(output7b$'RFR'),
+                                table(output7b$'RFT'), table(output7b$'RFP')))
+fwrite(single_rank_b,paste0(floc,'single_rank_b.csv'))
+#Rank 1
+# CF-MF   EE   OF-MF   RFP    RFR    RFT
+# 514    439   15690   11034  1393   406
+
+
+
 # do you want to run Monte Carlo Simulations?
 # Note - 'best_impact' is the string  input for impact_best
 sim.MC <- runMC_DST(db = d1,mam = ma_models, nsim = 1, covar = FALSE,simyear = 5,
@@ -57,6 +90,7 @@ sim.MC <- runMC_DST(db = d1,mam = ma_models, nsim = 1, covar = FALSE,simyear = 5
                   output = 'all', nmax=1)
 
 # run a DST simulation, varying the max number of combinations
+# without MC, the SD of the input values are not taken into account in generating variation in output
 
 #replace missing models with 0.001 and 0.001
 sim1 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
@@ -88,6 +122,8 @@ output4 <- sim4$impact_best
 # CF-MF  EE    OF-MF   RFP   RFR   RFT
 # 4400   1122   148    186   58   23562
 
+
+
 #replace missing models with NA and change NaN dX output to 0
 sim6 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 output6 <- sim6$impact_best
@@ -95,9 +131,41 @@ output6 <- sim6$impact_best
 # 11170   476   157   162   2531   14980
 
 
+#score_single
+sim7 <- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+output7 <- sim7$score_single
+single_rank <- data.frame(rbind(table(output7$'CF-MF'), table(output7$'OF-MF'),
+                             table(output7$'EE'), table(output7$'RFR'),
+                             table(output7$'RFT'), table(output7$'RFP')))
+fwrite(single_rank,paste0(floc,'single_rank.csv'))
+
+
+ #PLOT SCORE SINGLE AND TRY TO RECLASSIFY?
 
 
 
+#score_duo
+sim8 <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+output8 <- sim8$score_duo
+
+duo_rank <- data.frame(rbind(table(output8$'CF-MF-EE'), table(output8$'CF-MF-OF-MF'), table(output8$'CF-MF-RFP'),
+                       table(output8$'CF-MF-RFR'), table(output8$'CF-MF-RFT'),
+                       table(output8$'EE-OF-MF'), table(output8$'EE-RFP'), table(output8$'EE-RFR'), table(output8$'EE-RFT'),
+                       table(output8$'OF-MF-RFP'),
+                       table(output8$'OF-MF-RFR'), table(output8$'OF-MF-RFT'), table(output8$'RFP-RFR'), table(output8$'RFP-RFT'), table(output8$'RFR-RFT')))
+colnames(duo_rank) <- c('R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12',
+                        'R13', 'R14', 'R15')
+man_combo <- c('CF-MF-EE', 'CF-MF-OF-MF', 'CF-MF-RFP', 'CF-MF-RFR', 'CF-MF-RFT', 'EE-OF-MF',
+        'EE-RFP', 'EE-RFR', 'EE-RFT', 'OF-MF-RFP', 'OF-MF-RFR', 'OF-MF-RFT','RFP-RFR',
+        'RFP-RFT','RFR-RFT')
+duo_rank <- cbind(man_combo,duo_rank)
+fwrite(duo_rank,paste0(floc,'duo_rank.csv'))
+
+
+#score duo test to change output table
+sim9 <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+output9 <- sim9$score_duo
+output9mini <- data.table(ncu=output9$ncu, R1=output9$`1`, R2=output9$`2`, R3=output9$`3`)
 
 
 #

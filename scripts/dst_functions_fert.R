@@ -38,11 +38,13 @@
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
 # db = d1
 # dt.m = dt.m
-# output = 'total_impact'
+# output = 'score_single'
 # uw = c(1,1,1)
 # simyear = 5
 # quiet = FALSE
 # nmax=1
+
+
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
 
@@ -103,7 +105,13 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   d3[is.na(dSOC),dSOC := 0]
   d3[is.na(dNsu),dSOC := 0]
 
-  # ---- estimate DISTANCE TO TARGET APPROACH -----
+  # add metric for distance to target for inspecting maps - check LINE 113, 260 FOR COL SELECTION in outputs
+  d3[, dist_Y := yield_ref / yield_target ]
+  d3[, dist_C := soc_ref / soc_target ]
+  d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+  d3[is.na(dist_N), dist_N := 1]
+
+  # ---- estimate DISTANCE TO TARGET evaluation -----
 
   # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
   # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
@@ -118,11 +126,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   #EASILY REPLACE WITH s=1 to check outcomes without these functions
   #for results do not adapt the function itself
 
-  # add metric for distance to target for inspecting maps - check LINE 113, 260 FOR COL SELECTION in outputs
-  d3[, dist_Y := yield_ref / yield_target ]
-  d3[, dist_C := soc_ref / soc_target ]
-  d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
-  d3[is.na(dist_N), dist_N := 1]
+
 
   #*** ================
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
@@ -305,9 +309,10 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   if(sum(grepl('score_single|all',output))>0){
 
     # select relevant data and sort
-    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout3 <- dcast(pout3,ncu~man_code,value.var = 'bipmcs')
+    #  TO ADD THOSE columns
+    pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
   } else {pout3 = NULL}
 
   # collect the order of duo combinations of measures given their contribution to improve indicators
@@ -316,9 +321,9 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     # select relevant data and sort
     #SELECT NO. OF MEASURES 2; SELECT COLUMNS; OVERWRITE COLUMN BIPMCS (ORDER OF ALL COMBO MEASURES)
     #SO MAKING A SUBSET OF THIS BASED ON A CRITERIA; THEN RECALCULATE THE ORDER BASED ON "MISSING RANK VALUES"
-    pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout4 <- dcast(pout4,ncu~man_code,value.var = 'bipmcs')
+    pout4 <- dcast(pout4,ncu~bipmcs,value.var = 'man_code')
   } else {pout4 = NULL}
 
   # collect the order of the single measures given their contribution to improve indicators
@@ -327,7 +332,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   if(sum(grepl('score_best|all',output))>0){
 
     # select relevant data and sort
-    pout5 <- dt.out[bipmcs==1,.(ncu,man_code)]
+    pout5 <- dt.out[bipmcs==1,.(ncu,man_code,dist_Y,dist_C,dist_N)]
     setorder(pout5,ncu)
   } else {pout5 = NULL}
 
