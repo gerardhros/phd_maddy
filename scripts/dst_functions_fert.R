@@ -13,8 +13,8 @@
 #'
 #' @details
 #'  run the optimizer with the following options for output:
-#'  'total_impact' gives all impacts for ALL INDICATORs and ALL COMBO OF MEASURES
-#'                 returns various numbers of options per NCU with changes in all indicators
+#'  'total_impact' lists all impacts for ALL COMBO OF MEASURES
+#'                 returns various numbers of options per NCU with changes listed in all indicators
 #'
 #'                ???no distance to target or user weight used???
 #'
@@ -286,10 +286,8 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     setorder(pout1,ncu)
   } else {pout1 = NULL}
 
-  # collect relevant output for case that only best measure (or combination of measures) have been applied
-  # what is the changes in indicators when only the best measure or chosen number of best combined measures applied
-  #WHICHEVER HAS BEST IMPACT GIVEN DISTANCE TO TARGET AND USER IMPORTANCE
-  #ADAPTATION EXAMPLE - WHAT IS "THEORETICAL MAXIMUM"
+  # the case where only best measure (or combination of measures) have been applied
+  # show the changes in indicators as well as distance to target status
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
@@ -297,8 +295,8 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
-  # collect the order of the single measures given their contribution to improve indicators
-  # output such as in paper 1 - simple ranking of individual measures
+  # collect the ORDER/RANKING of the single measures
+  # ranking of each individual measure in a column
   # filtering by single measures
   if(sum(grepl('score_single|all',output))>0){
 
@@ -309,7 +307,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
   } else {pout3 = NULL}
 
-  # collect the order of duo combinations of measures given their contribution to improve indicators
+  # collect the ORDER/RANKING of TWO combinations of measures
   if(sum(grepl('score_duo|all',output))>0 & nmax >= 2){
 
     # select relevant data and sort
@@ -320,15 +318,21 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     pout4 <- dcast(pout4,ncu~bipmcs,value.var = 'man_code')
   } else {pout4 = NULL}
 
-  # collect the order of the single measures given their contribution to improve indicators
-  # filtering based on impact (bipmcs)
-  #MEANT TO BE SAME AS POUT4 BUT FOR BEST COMBO
-  if(sum(grepl('score_best|all',output))>0){
+  # collect the ORDER/RANKING of THREE combinations of measures
+  if(sum(grepl('score_trio|all',output))>0 & nmax >= 3){
 
-    # select relevant data and sort
-    pout5 <- dt.out[bipmcs==1,.(ncu,man_code,dist_Y,dist_C,dist_N)]
-    setorder(pout5,ncu)
+    pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
+    pout5 <- dcast(pout5,ncu~bipmcs,value.var = 'man_code')
   } else {pout5 = NULL}
+
+  # THIS IS SAME AS POUT2 BUT FOR BEST COMBO
+  # if(sum(grepl('score_best|all',output))>0){
+  #
+  #   # select relevant data and sort
+  #   pout5 <- dt.out[bipmcs==1,.(ncu,man_code,dist_Y,dist_C,dist_N)]
+  #   setorder(pout5,ncu)
+  # } else {pout5 = NULL}
 
 
   # update progress bar
@@ -339,7 +343,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
               impact_best = pout2,
               score_single = pout3,
               score_duo = pout4,
-              score_best = pout5)
+              score_trio = pout5)
 
   # update progress bar
   if(!quiet) {j = j+1; setTxtProgressBar(pb, j);close(pb)}

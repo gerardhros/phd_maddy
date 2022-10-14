@@ -34,7 +34,7 @@ d1 <- fread(paste0(floc,'db_final_europe.csv'))
 
 # load the default meta-analytical models AND covariate models
 # creates a list of objects --grand mean man (7) - grand SD-cov means (58) - cov SDs--
-ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0_1.xlsx')
+ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0-1_OF-Nsu.xlsx')
 
 # join MA impact models for fertiliser measures (specific to IFS conference paper)
 # outcome: ncu / area meas. / indicator / meas. code / mean change / SD
@@ -43,17 +43,57 @@ dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models)
 dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models)
 dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models)
-dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models)
-dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models)
+dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar=TRUE)
+dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar=TRUE)
 
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
-#replace missing models with NA and change NaN dX output to 0
-sim6 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
-output6 <- sim6$impact_best
-# CF-MF   EE   OF-MF   RFP   RFR   RFT
-# 11170   476   157   162   2531   14980
+#replace missing models with 0
+sim1 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+out.best <- sim1$impact_best
+mean.fact.best <- aggregate(.~man_code,data=out.best,mean)
+
+#WITH COVARIATES
+sim.cov <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+out.best.cov <- sim.cov$impact_best
+
+
+mean.fact.best <- aggregate(.~man_code,data=out.best,mean)
+
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,5),simyear = 5,quiet = FALSE,nmax=1)
+
+  # 1 best measure - should be same info as out.single
+  out.best <- sim.all$impact_best
+
+  # ranking of each measure - map - check second ranked measure after EE
+  out.single <- sim.all$score_single
+  out.single$concat <- paste(out.single$`1`,out.single$`2`,out.single$`3`,
+                                         out.single$`4`,out.single$`5`,out.single$`6`, sep='-')
+
+
+
+sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+
+  # 1 best measure, how is this different from impact_best?
+  out.best.2 <- sim.all.2$score_best
+  best.sum.2 <- table(out.best.2$man_code)
+
+  # total list of all possible combinations per ncu and impacts, not relevant to map
+  out.total.2 <- sim.all.2$impact_total
+
+  # best pair of measures - create maps of this
+  out.duo.2 <- sim.all.2$score_duo
+  duo.sum.2 <- table(out.duo.2$`1`)
+
+  # map duo
+
+sim.all.3 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
+
+
+
+
+
 
 #score_single
 # ncu+dist_Y+dist_C+dist_N~bipmcs, value=man_code
