@@ -38,11 +38,11 @@
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
 # db = d1
 # dt.m = dt.m
-# output = 'score_single'
+# output = 'best_impact'
 # uw = c(1,1,1)
 # simyear = 5
 # quiet = FALSE
-# nmax=1
+# nmax=2
 
 
 
@@ -523,8 +523,7 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
     dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
   } else if(management=='OF-MF'){
     # replacing inorganic with organic has only impact on soils with no organic input and limited inorganic
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)]
-    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.nifnof + parea.mifnof + parea.hifnof)]
   }
 
   #OUTPUT of 2 columns and 7 columns specifying areas within each ncu matched to

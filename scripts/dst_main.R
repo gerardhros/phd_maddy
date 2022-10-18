@@ -20,7 +20,7 @@
   source('scripts/dst_functions.r')
 
   # location of data objects not stored on github
-  floc <- 'C:/dst_outputs/'
+  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
   # read in the earlier saved database from integrator
   d1 <- fread(paste0(floc,'db_final_europe.csv'))
@@ -41,12 +41,13 @@
 
   # combine all measures and their impacts into one data.table
   dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7)
-
+  rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7)
 
   # run a DST simulation
   sim1 <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
   simX <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
+  saveRDS(simX,'D:/ESA/02 phd projects/01 maddy young/01 data/simx.rds')
   outputX <- simX$impact_best
 
   sim2 <- runDST(db = d1, dt.m = dt.m, output = 'score_best',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)

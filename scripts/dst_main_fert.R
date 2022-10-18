@@ -14,7 +14,7 @@
 
 # dst_functions = used by all scripts
 
-setwd('C:/phd_maddy/')
+#setwd('C:/phd_maddy/')
 
 # load packages
 require(readxl);require(data.table)
@@ -26,15 +26,15 @@ rm(list=ls())
 source('scripts/dst_functions_fert.r')
 
 # location of data objects not stored on github
-floc <- 'C:/dst_outputs/'
+floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
 d1 <- fread(paste0(floc,'db_final_europe.csv'))
-
+d1 <- d1[ncu < 1000]
 # load the default meta-analytical models AND covariate models
 # creates a list of objects --grand mean man (7) - grand SD-cov means (58) - cov SDs--
-ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0_1.xlsx')
+ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_meas_0_1.xlsx')
 
 # join MA impact models for fertiliser measures (specific to IFS conference paper)
 # outcome: ncu / area meas. / indicator / meas. code / mean change / SD
@@ -50,7 +50,7 @@ dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models)
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
 #replace missing models with NA and change NaN dX output to 0
-sim6 <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim6 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
 output6 <- sim6$impact_best
 # CF-MF   EE   OF-MF   RFP   RFR   RFT
 # 11170   476   157   162   2531   14980
