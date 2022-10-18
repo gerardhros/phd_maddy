@@ -98,7 +98,7 @@ terra::writeRaster(r.fin,'products/out.single.tif', overwrite = TRUE)
 #================================================
 
 #impact_best
-r.ncu <- merge(r1.p, out.duo.2, by.x = 'gncu2010_ext', by.y = 'ncu')
+r.ncu <- merge(r1.p, out.duo, by.x = 'gncu2010_ext', by.y = 'ncu')
 
 #make man codes numeric for raster
 ord <- c('EE-RFR','CF-MF-EE','EE-RFT','CF-MF-RFT','CF-MF-RFR','CF-MF-OF-MF','CF-MF-RFP','EE-OF-MF',
@@ -129,10 +129,7 @@ setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','1','2','3','4','5','6','7','8',
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
-terra::writeRaster(r.fin,'products/out.duo.2.tif', overwrite = TRUE)
-
-
-
+terra::writeRaster(r.fin,'products/out.duo.tif', overwrite = TRUE)
 
 
 
@@ -172,10 +169,24 @@ setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','1','2','3','4','5','6','7','8',
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
-terra::writeRaster(r.fin,'products/out.duo.2.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.trio.tif', overwrite = TRUE)
 
 
 
+#================================================
+# Reference values
+#================================================
+
+r.ncu <- merge(r1.p, ref.values, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref','soc_ref','n_sp_ref','yield_target','soc_target'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/ref.values.tif', overwrite = TRUE)
 
 
 

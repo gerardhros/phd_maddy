@@ -48,7 +48,7 @@
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
 
-runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL){
+runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL){
 
   # make local copy of the INTEGRATOR/Eurostat database
   d2 <- copy(db)
@@ -124,6 +124,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
   #for results do not adapt the function itself
 
 
+  # HERE NSU
 
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
   # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
@@ -315,7 +316,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
     #SO MAKING A SUBSET OF THIS BASED ON A CRITERIA; THEN RECALCULATE THE ORDER BASED ON "MISSING RANK VALUES"
     pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout4 <- dcast(pout4,ncu~bipmcs,value.var = 'man_code')
+    pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
   } else {pout4 = NULL}
 
   # collect the ORDER/RANKING of THREE combinations of measures
@@ -323,7 +324,7 @@ runDST <- function(db, dt.m, output = 'total_impact',uw = c(1,1,1), simyear = 5,
 
     pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout5 <- dcast(pout5,ncu~bipmcs,value.var = 'man_code')
+    pout5 <- dcast(pout5,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
   } else {pout5 = NULL}
 
   # THIS IS SAME AS POUT2 BUT FOR BEST COMBO
@@ -523,12 +524,14 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
   } else if(management=='CF-MF'){
     # impact of partly replacing mineral fertilizers by organic ones
     # since impact is lower on highly fertilized soils, I halve the area (being identical to half the impact)
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)]
-    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
+    # correction for highly fertilized soils- ha_m1 = parea.nifnof+parea.hifnof+0.75*parea.mifnof+0.75*parea.hifhof+0.25*parea.mifhof
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.nifnof+parea.hifnof+0.75*parea.mifnof+0.75*parea.hifhof+0.25*parea.mifhof)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.nifnof+parea.hifnof+0.75*parea.mifnof+0.75*parea.hifhof+0.25*parea.mifhof)]
   } else if(management=='OF-MF'){
     # replacing inorganic with organic has only impact on soils with no organic input and limited inorganic
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)]
-    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
+    # correction for highly fertilized soils- ha_m1 = parea.nifnof+parea.hifnof+0.75*parea.mifnof+0.75*parea.hifhof+0.25*parea.mifhof
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.nifnof+parea.hifnof+0.75*parea.mifnof+0.75*parea.hifhof+0.25*parea.mifhof)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.nifnof+parea.hifnof+0.75*parea.mifnof+0.75*parea.hifhof+0.25*parea.mifhof)]
   }
 
   #OUTPUT of 2 columns and 7 columns specifying areas within each ncu matched to

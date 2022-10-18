@@ -13,6 +13,9 @@ require(data.table)
 # install.packages("rnaturalearthdata")
 # install.packages("terra")
 
+#================================================
+# get spatial raster data
+#================================================
 
 # set theme
 theme_set(theme_bw())
@@ -24,15 +27,157 @@ r1 <- terra::rast('products/gncu2010_ext.asc')
 r1.p <- as.data.frame(r1,xy=TRUE)
 r1.p <- as.data.table(r1.p)
 
-# join/merge output.3a with r1.p
-r.ncu <- merge(r1.p, output.3a, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+#================================================
+# link raster to map different band outputs
+#================================================
+
+# join/merge outputs with r1.p
+r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 
 # write as output
-terra::writeRaster(r.fin,'products/output.3a.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
+r1 <- terra::rast('C:/phd_maddy/products/out.best.tif')
+r1.p <- as.data.frame(r1,xy=TRUE)
+#================================================
+# d yield
+#================================================
+p1 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dY)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("Yield", subtitle = "Change due to best measure (%)") +
+  coord_sf(crs = 4326) + theme_bw()
+p1
+ggsave(plot = p1, filename = 'C:/phd_maddy/products/dY.jpg')
+
+
+#================================================
+# d soc
+#================================================
+p2 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dSOC)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("SOC", subtitle = "Change due to best measure (%)") +
+  coord_sf(crs = 4326) + theme_bw()
+p2
+ggsave(plot = p2, filename = 'C:/phd_maddy/products/dSOC.jpg')
+
+
+#================================================
+# Nsu distance
+#================================================
+p3 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dNsu)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("N surplus", subtitle = "Change due to best measure (%)") +
+  coord_sf(crs = 4326) + theme_bw()
+p3
+ggsave(plot = p3, filename = 'C:/phd_maddy/products/dNsu.jpg')
+
+#================================================
+# yield distance
+#================================================
+p1 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dist_Y)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("Yield", subtitle = "Distance to target (ref/target)") +
+  coord_sf(crs = 4326) + theme_bw()
+p1
+ggsave(plot = p1, filename = 'C:/phd_maddy/products/yield_dist.jpg')
+
+
+#================================================
+# soc distance
+#================================================
+p2 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dist_C)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("SOC", subtitle = "Distance to target (ref/target)") +
+  coord_sf(crs = 4326) + theme_bw()
+p2
+ggsave(plot = p2, filename = 'C:/phd_maddy/products/soc_dist.jpg')
+
+
+#================================================
+# Nsu distance
+#================================================
+p3 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= dist_N)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("N surplus", subtitle = "Distance to target (ref/target)") +
+  coord_sf(crs = 4326) + theme_bw()
+p3
+ggsave(plot = p3, filename = 'C:/phd_maddy/products/nsu_dist.jpg')
+
+
+#================================================
+# yield ref
+#================================================
+
+p1 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= yield_ref)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("Yield", subtitle = "Reference value (kg)") +
+  coord_sf(crs = 4326) + theme_bw()
+p1
+ggsave(plot = p1, filename = 'C:/phd_maddy/products/yield_ref.jpg')
+
+
+#================================================
+# soc ref
+#================================================
+
+p2 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= soc_ref)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("SOC", subtitle = "Reference value (%)") +
+  coord_sf(crs = 4326) + theme_bw()
+p2
+ggsave(plot = p2, filename = 'C:/phd_maddy/products/soc_ref.jpg')
+
+
+#================================================
+# soc ref
+#================================================
+
+p3 = ggplot() +
+  geom_raster(data = r1.p,aes(x=x,y=y,fill= n_sp_ref)) + #changing fill= whatever col to plot
+  scale_fill_viridis_c(direction=-1)+
+  # theme_void() + #automatic continuous color legend (can check others, e.g. for categorical)
+  theme(legend.position = 'bottom')+
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("N surplus", subtitle = "Reference value (kg)") +
+  coord_sf(crs = 4326) + theme_bw()
+p3
+ggsave(plot = p3, filename = 'C:/phd_maddy/products/nsu_ref.jpg')
 
 
 
@@ -54,7 +199,7 @@ ggsave(plot = p1, filename = 'products/nue_effect_s1.jpg')
 # plot source data to understand spatial patterns
 
   # get the raster to plot crops
-  r1 <- terra::rast('C:/phd_maddy/products/output.2a.tif')
+  r1 <- terra::rast('C:/phd_maddy/products/ref.values.tif')
   r1.p <- as.data.frame(r1,xy=TRUE)
   # r1.p$total = (r1.p$RICE + r1.p$MAIZ + r1.p$other + r1.p$wheat)/1000
   # ggplot(data = world) + geom_sf(color = "black", fill = "gray92") +
