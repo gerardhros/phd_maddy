@@ -14,10 +14,14 @@
 
 # dst_functions = used by all scripts
 
-#setwd('C:/phd_maddy/')
+#================================================
+# set data sources
+#================================================
+
+setwd('C:/phd_maddy/')
 
 # load packages
-require(readxl);require(data.table)
+require(readxl);require(data.table); require(dplyr)
 
 # remove data
 rm(list=ls())
@@ -28,32 +32,155 @@ source('scripts/dst_functions_fert.r')
 # location of data objects not stored on github
 floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
+#================================================
+# connect databases, meta-models, site factors
+#================================================
+
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
 d1 <- fread(paste0(floc,'db_final_europe.csv'))
-d1 <- d1[ncu < 1000]
-# load the default meta-analytical models AND covariate models
-# creates a list of objects --grand mean man (7) - grand SD-cov means (58) - cov SDs--
-ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_meas_0_1.xlsx')
 
-# join MA impact models for fertiliser measures (specific to IFS conference paper)
-# outcome: ncu / area meas. / indicator / meas. code / mean change / SD
+# load the global AND covariate meta-models when available
+ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0-1_OF-Nsu.xlsx')
 
+# join MA impact models for fertiliser measures
 dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models)
 dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models)
 dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models)
-dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models)
-dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models)
+dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = TRUE)
+dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
 
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
-#replace missing models with NA and change NaN dX output to 0
-sim6 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
-output6 <- sim6$impact_best
-# CF-MF   EE   OF-MF   RFP   RFR   RFT
-# 11170   476   157   162   2531   14980
+# create data table to summarize over mean of continuous variables
+# N critical is left out - MISSING VALUES AND VARUES PER CROP TYPE - NEEDS WEIGHTED MEAN PER NCU
+d1.fact.cont <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
+                             d1$yield_ref, d1$soc_ref, d1$n_sp_ref,
+                             d1$yield_target, d1$soc_target)) #d1$n_sp_sw_crit, d1$n_sp_gw_crit
+colnames(d1.fact.cont) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
+                         'yield_ref', 'soc_ref', 'n_sp_ref','yield_target', 'soc_target') #'n_sp_sw_crit', 'n_sp_gw_crit'
+d1.fact.cont <- aggregate(.~ncu,d1.fact.cont,mean)
+
+# save meta-models in table
+ma.models <- data.frame(ma_models$ma_mean)
+fwrite(ma.models,paste0(floc,'ma.models.csv'))
+ma.cov.models <- data.frame(ma_models$ma_cov_mean)
+fwrite(ma.cov.models,paste0(floc,'ma.cov.models.csv'))
+
+#=====================================================================================
+# DST simulation for best measure and ranking of measures, ONE measure applied at time
+#=====================================================================================
+
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+
+# IMPACT_BEST -----------------------------------------------------------------
+
+# save 1 best measure
+out.best <- sim.all$impact_best
+
+  #frequency of best measures - make table for single rankings
+  table(out.best$man_code)
+
+  #summary over input/output parameters
+  out.best.param <- aggregate(.~man_code,data=out.best,mean)
+  #merge out.best with continuous site factors
+  fact.cont.best <- merge(d1.fact.cont,out.best,by='ncu')
+  fact.best <- aggregate(.~man_code,data=fact.cont.best,mean)
+
+  fwrite(fact.best,paste0(floc,'fact.best.csv'))
+
+
+# SCORE_SINGLE ----------------------------------------------------------------
+
+# ranking of each measure - map - check second ranked measure after EE
+out.single <- sim.all$score_single
+out.single$concat <- paste(out.single$`1`,out.single$`2`,out.single$`3`,
+                           out.single$`4`,out.single$`5`,out.single$`6`, sep='-')
+
+  #frequency of best measures - make table for single rankings
+  rank.single <- data.frame(table(out.single$concat))
+  fwrite(rank.single,paste0(floc,'rank.single.csv'))
+  colnames(rank.single) <- c('concat', 'freq')
+
+  #select columns to summarize continuous variables
+  out.single.stat <- out.single[,.(ncu,concat,dist_Y,dist_C,dist_N)]
+  #summary over input/output parameters
+  out.single.param <- aggregate(.~concat,data=out.single.stat,mean)
+  #merge with continuous site factors and save
+  fact.cont.single <- merge(d1.fact.cont,out.single.stat,by='ncu')
+  fact.cont.single <- merge(fact.cont.single,rank.single,by='concat')
+
+  fact.single <- aggregate(.~concat,data=fact.cont.single,mean)
+
+  fwrite(fact.single,paste0(floc,'fact.single.csv'))
+
+
+###### summary statistics  NOT WORKING FOR CATEGORICAL
+# ??? must choose just one line for categorical variables but not sure how to aggregate ???
+# simply remove duplicates categorical variables or group by
+# main crop type can be derived per NCU later by regrouping in main categories and assigning majority area
+# or save each crop area as column and check relationship to proportion of the crop area
+
+#categorical variables
+# colnames(d1.fact) <- c('ncu', 'texture', 'cov_soil', 'cov_clim', 'cov_fert','cov_soc',
+#                        'yield_ref', 'soc_ref', 'n_sp_ref','yield_target', 'soc_target', 'n_sp_sw_crit', 'n_sp_gw_crit')
+######
+
+#=====================================================================================
+# DST simulation for TWO combined measures applied at once
+#=====================================================================================
+sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+
+  # best pair of TWO measures
+  out.duo <- sim.all.2$score_duo
+  #frequency of best measures - make table for single rankings
+  rank.duo <- data.frame(table(out.duo$`1`))
+  fwrite(rank.duo,paste0(floc,'rank.duo.csv'))
+  colnames(rank.single) <- c('concat', 'freq')
+
+  #select columns to summarize continuous variables
+  out.duo.stat <- out.duo[,.(ncu,`1`,dist_Y,dist_C,dist_N)]
+  #summary over input/output parameters
+  #merge with continuous site factors and save
+  fact.cont.duo <- merge(d1.fact.cont,out.duo.stat,by='ncu')
+
+  fact.duo <- aggregate(.~`1`,data=fact.cont.duo,mean)
+  fwrite(fact.duo,paste0(floc,'fact.duo.csv'))
+
+#=====================================================================================
+# DST simulation for THREE combined measures applied at once
+#=====================================================================================
+sim.all.3 <- runDST(db = d1, dt.m = dt.m, output = 'score_trio',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
+  # best pair of THREE measures
+  out.trio <- sim.all.3$score_trio
+  #frequency of best measures - make table for single rankings
+  rank.trio <- data.frame(table(out.trio$`1`))
+  fwrite(rank.trio,paste0(floc,'rank.trio.csv'))
+
+  #select columns to summarize continuous variables
+  out.trio.stat <- out.trio[,.(ncu,`1`,dist_Y,dist_C,dist_N)]
+  #summary over input/output parameters
+  #merge with continuous site factors and save
+  fact.cont.trio <- merge(d1.fact.cont,out.trio.stat,by='ncu')
+  fact.trio <- aggregate(.~`1`,data=fact.cont.trio,mean)
+  fwrite(fact.trio,paste0(floc,'fact.trio.csv'))
+
+# output_total lists all possible combinations per ncu and impacts
+# not relevant to map but might be useful later to show different applications
+
+#=====================================================================================
+# Reference maps
+#=====================================================================================
+
+d1.sub <- d1[,.(ncu,yield_ref,soc_ref,n_sp_ref,yield_target,soc_target)]
+ref.values <- aggregate(.~ncu,data=d1.sub,mean)
+
+soc.ref <- aggregate(.~soc_ref,data=d1,mean)
+nsu.ref <- aggregate(.~n_sp_ref,data=d1,mean)
+
+
 
 #score_single
 # ncu+dist_Y+dist_C+dist_N~bipmcs, value=man_code
