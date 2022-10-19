@@ -1,7 +1,7 @@
 
 
 #GENERATING TIFF AND OUTPUT MAPS
-
+setwd('C:/phd_maddy/')
 
 library(ggplot2)
 library(sf)
@@ -9,6 +9,7 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(terra)
 require(data.table)
+
 
 # install packages once for those not used before
 # install.packages("sf")
@@ -29,13 +30,12 @@ r1 <- terra::rast('products/gncu2010_ext.asc')
 # convert to data.frame
 # adding na.rm=F solves the following error, even though the map not affected
 # Error in x$.self$finalize() : attempt to apply non-function
-r1.p <- as.data.frame(r1,xy=TRUE,na.rm=FALSE)
+r1.p <- as.data.frame(r1,xy=TRUE)
 r1.p <- as.data.table(r1.p)
 
-
-#================================================
-# IMPACT_BEST
-#================================================
+#===============================================================================
+# IMPACT_BEST map for QGIS inspection
+#===============================================================================
 
 r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
 
@@ -50,7 +50,7 @@ r.ncu[man_code == 'RFT' , man_num := 5]
 r.ncu[man_code == 'RFP' , man_num := 6]
 
 # set columns in right order for conversion to raster
- setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
@@ -58,10 +58,215 @@ terra::crs(r.fin) <- 'epsg:4326'
 # write as output
 terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
 
+#===============================================================================
+# link raster to different output sets
+#===============================================================================
 
-#================================================
+# with different input files
+#   out.best - values at t=5, etc.
+#   d1.fact.cont - values at t=0 and site properties from Integrator
+
+r.ncu <- merge(r1.p, fact.rast, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref','soc_ref','n_sp_ref'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/fact.rast.tif', overwrite = TRUE)
+
+
+
+
+#===============================================================================
+# function from Gerard to make a map by each band/output
+#===============================================================================
+
+# visualisation function of a raster file (its a global plot, so it still uses
+# object world2 as starting point (similar as your first plot function for EU map)
+# the argument ftitle is a string with the title that you want to plot on top of the figure
+
+visualize <- function(raster, layer, name, breaks, labels, ftitle){
+  # select the correct layer
+  raster.int <- raster[layer]
+  # define crs
+  plotcrs <- coord_sf(crs = 4326, lims_method = "box")
+  #raster to xy
+  df <- as.data.frame(raster.int, xy = TRUE)
+  #colnames
+  colnames(df) <- c("x", "y", "variable")
+  #plot
+  ggplot() +
+    geom_tile(data = df, aes(x = x, y = y,fill = cut(variable, breaks,labels = labels))) +
+    plotcrs +
+    scale_fill_viridis_d(direction=-1) +
+    xlab("") + ylab("")+
+    #xlab("Longitude") + ylab("Latitude") +
+    labs(fill = name) +
+    theme(text = element_text(size = 18),
+          legend.text=element_text(size=12),
+          legend.position = c(0.1,0.8),
+          legend.background = element_rect(fill = "white",color='white'),
+          panel.border = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    ggtitle(ftitle)
+}
+
+#===============================================================================
+# yield REFERENCE (timestep 0)
+#===============================================================================
+
+p1 <- visualize(raster = r.fin,
+                layer = 'yield_ref',
+                name = "Ref value",
+                breaks = c(0,2500,5000,7500,10000,12500,15000,17500,20000,22500,25000,27500,30000,32500,35000,37500,55000),
+                labels = c('<2500','2500-5000','5000-7500','7500-10000','10000-12500','12500-15000','15000-17500','17500-20000','20000-22500',
+                           '22500-25000','25000-27500','27500-30000','30000-32500','32500-35000','35000-37500','37500-50000'),
+                ftitle = 'Yield (kg ha-1)')
+ggsave(filename = "products/yield_ref.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# soc REFERENCE (timestep 0)
+#===============================================================================
+# labels and breaks: breaks is a vector showing the cut between labels,
+# labels is a vector with strings how to describe the classes
+# name is a string being the text above the legend
+
+p1 <- visualize(raster = r.fin,
+                layer = 'soc_ref',
+                name = "Ref value",
+                breaks = c(0,0.5,1,1.5,3,5,10,20,30,50),
+                labels = c('< 0.5','0.5 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 30','30 - 50'),
+                ftitle = 'SOC (%)')
+ggsave(filename = "products/soc_ref.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# Nsu REFERENCE (timestep 0)
+#===============================================================================
+#
+# breaks = c(0,0.5,1,2.5,5,10,20)
+# labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 20')
+#
+# breaks = c(0,2.5,5,7.5,10,15,20)
+# labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 15','15 - 20')
+
+p1 <- visualize(raster = r.fin,
+                layer = 'n_sp_ref',
+                name = "Ref value",
+                breaks = c(-300,25,50,75,100,150,300),
+                labels = c('< 25','25 - 50','50 - 75','75 - 100','100 - 150','150 - 200'),
+                ftitle = 'N surplus (kg ha-1)')
+ggsave(filename = "products/n_sp_ref.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# yield DISTANCE (INITIAL TIMESTEP 0)
+#===============================================================================
+# labels and breaks: breaks is a vector showing the cut between labels,
+# labels is a vector with strings how to describe the classes
+# name is a string being the text above the legend
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_Y.x',
+                name = "Ref/Target",
+                breaks = c(0,1,1.25,1.5,1.75,2,2.5,3,4),
+                labels = c('< 1','1 - 1.25','1.25 - 1.5','1.5 - 1.75','1.75 - 2','2 - 2.5','2.5 - 3','3 - 4'),
+                ftitle = 'Yield distance to target (ratio)')
+ggsave(filename = "products/dist_Y_ref.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# soc DISTANCE (INITIAL TIMESTEP 0)
+#===============================================================================
+# labels and breaks: breaks is a vector showing the cut between labels,
+# labels is a vector with strings how to describe the classes
+# name is a string being the text above the legend
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_C.x',
+                name = "Ref/Target",
+                breaks = c(0,0.5,1,1.5,3,5,10,20,30,40),
+                labels = c('< 0.5','0.5 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 30','30 - 40'),
+                ftitle = 'SOC distance to target (ratio)')
+ggsave(filename = "products/dist_C_ref.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+
+#===============================================================================
+# Nsu distance (INITIAL TIMESTEP 0)
+#===============================================================================
+#
+# breaks = c(0,0.5,1,2.5,5,10,20)
+# labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 20')
+#
+# breaks = c(0,2.5,5,7.5,10,15,20)
+# labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 15','15 - 20')
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_N.x',
+                name = "Ref/Target",
+                breaks = c(-2,0.5,1,2.5,5,10,25),
+                labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 25'),
+                ftitle = 'N surplus distance to target (ratio)')
+ggsave(filename = "products/dist_N_ref.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+
+#===============================================================================
+# soc distance (FINAL TIMESTEP 5 YEARS)
+#===============================================================================
+# labels and breaks: breaks is a vector showing the cut between labels,
+# labels is a vector with strings how to describe the classes
+# name is a string being the text above the legend
+
+# labels = c('<1','1-2','2-3','3-4','4-5','5-10','10-15','15-20','20-25','25-30','30-40')
+# breaks = c(0,1,2,3,4,5,10,15,20,25,30,40)
+#
+# labels = c('<0.5','0.5-1','1-1.5','1.5-2','2-3','3-5','5-10','10-20','20-30','30-40')
+# breaks = c(0,0.5,1,1.5,2,3,5,10,20,30,40)
+#
+# labels = c('<0.5','0.5-1','1-1.5','1.5-3','3-5','5-10','10-20','20-30','30-40')
+# breaks = c(0,0.5,1,1.5,3,5,10,20,30,40)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_C',
+                name = "Ref/Target",
+                breaks = c(0,0.5,1,1.5,3,5,10,20,30,40),
+                labels = c('< 0.5','0.5 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 30','30 - 40'),
+                ftitle = 'SOC distance to target (ratio)')
+ggsave(filename = "products/dist_SOC.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# Nsu distance (FINAL TIMESTEP 5 YEARS)
+#===============================================================================
+
+breaks = c(0,0.5,1,2.5,5,10,20)
+labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 20')
+
+breaks = c(0,2.5,5,7.5,10,15,20)
+labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 15','15 - 20')
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_N',
+                name = "Ref/Target",
+                breaks = c(-2,0.5,1,2.5,5,10,25),
+                labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 25'),
+                ftitle = 'N surplus distance to target (ratio)')
+ggsave(filename = "products/dist_N.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
 # SCORE_SINGLE
-#================================================
+#===============================================================================
 
 r.ncu <- merge(r1.p, out.single, by.x = 'gncu2010_ext', by.y = 'ncu')
 
@@ -93,9 +298,9 @@ terra::crs(r.fin) <- 'epsg:4326'
 terra::writeRaster(r.fin,'products/out.single.tif', overwrite = TRUE)
 
 
-#================================================
+#===============================================================================
 # SCORE DUO
-#================================================
+#===============================================================================
 
 #impact_best
 r.ncu <- merge(r1.p, out.duo, by.x = 'gncu2010_ext', by.y = 'ncu')
@@ -133,9 +338,9 @@ terra::writeRaster(r.fin,'products/out.duo.tif', overwrite = TRUE)
 
 
 
-#================================================
+#===============================================================================
 # SCORE TRIO
-#================================================
+#===============================================================================
 
 #impact_best
 r.ncu <- merge(r1.p, out.trio, by.x = 'gncu2010_ext', by.y = 'ncu')
@@ -173,9 +378,9 @@ terra::writeRaster(r.fin,'products/out.trio.tif', overwrite = TRUE)
 
 
 
-#================================================
+#===============================================================================
 # Reference values
-#================================================
+#===============================================================================
 
 r.ncu <- merge(r1.p, ref.values, by.x = 'gncu2010_ext', by.y = 'ncu')
 

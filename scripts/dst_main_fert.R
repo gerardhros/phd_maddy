@@ -54,14 +54,27 @@ dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
+rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
+
 # create data table to summarize over mean of continuous variables
-# N critical is left out - MISSING VALUES AND VARUES PER CROP TYPE - NEEDS WEIGHTED MEAN PER NCU
-d1.fact.cont <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
+# N critical is left out - MISSING VALUES AND VALUES PER CROP TYPE - NEEDS WEIGHTED MEAN PER NCU
+d1.fact <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
                              d1$yield_ref, d1$soc_ref, d1$n_sp_ref,
-                             d1$yield_target, d1$soc_target)) #d1$n_sp_sw_crit, d1$n_sp_gw_crit
-colnames(d1.fact.cont) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
-                         'yield_ref', 'soc_ref', 'n_sp_ref','yield_target', 'soc_target') #'n_sp_sw_crit', 'n_sp_gw_crit'
-d1.fact.cont <- aggregate(.~ncu,d1.fact.cont,mean)
+                             d1$yield_target, d1$soc_target,d1$n_sp_sw_crit, d1$n_sp_gw_crit))
+colnames(d1.fact) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
+                         'yield_ref', 'soc_ref', 'n_sp_ref','yield_target', 'soc_target','n_sp_sw_crit', 'n_sp_gw_crit')
+
+#add INITIAL distance to targets index
+d1.fact[, dist_Y := yield_ref / yield_target ]
+d1.fact[, dist_C := soc_ref / soc_target ]
+d1.fact[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+d1.fact[is.na(dist_N), dist_N := 1]
+
+
+#remove Nsu critical columns due to missing values
+d1.fact.sub = subset(d1.fact, select = -c(n_sp_sw_crit,n_sp_gw_crit) )
+#aggregate by ncu
+d1.fact.cont <- aggregate(.~ncu,d1.fact,mean)
 
 # save meta-models in table
 ma.models <- data.frame(ma_models$ma_mean)
@@ -83,13 +96,57 @@ out.best <- sim.all$impact_best
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
 
+  #add new distance indices
+  #add FINAL distance to targets index
+
+
   #summary over input/output parameters
   out.best.param <- aggregate(.~man_code,data=out.best,mean)
   #merge out.best with continuous site factors
-  fact.cont.best <- merge(d1.fact.cont,out.best,by='ncu')
-  fact.best <- aggregate(.~man_code,data=fact.cont.best,mean)
+  fact.best <- as.data.table(merge(d1.fact.cont,out.best,by='ncu'))
 
-  fwrite(fact.best,paste0(floc,'fact.best.csv'))
+  fact.best[, dist_Y_fin := ((1+dY) * yield_ref) / yield_target ]
+  fact.best[, dist_C_fin := ((1+dSOC) * soc_ref) / soc_target ]
+  fact.best[, dist_N_fin := ((1+dNsu) * n_sp_ref) / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+  fact.best[is.na(dist_N_fin), dist_N_fin := 1]
+
+  # Yield ref target met yes/no
+  fact.best[dist_Y.x<1, targ_ref_met := 0]
+  fact.best[dist_Y.x>1, targ_ref_met := 1]
+  # Yield final target met yes/no
+  fact.best[dist_Y_fin<1, targ_fin_met := 0]
+  fact.best[dist_Y_fin>1, targ_fin_met := 1]
+
+  table(fact.best$targ_ref_met)
+  table(fact.best$targ_fin_met)
+
+  # SOC ref target met yes/no
+  fact.best[dist_C.x<1, Ctarg_ref_met := 0]
+  fact.best[dist_C.x>1, Ctarg_ref_met := 1]
+  # SOC final target met yes/no
+  fact.best[dist_C_fin<1, Ctarg_fin_met := 0]
+  fact.best[dist_C_fin>1, Ctarg_fin_met := 1]
+
+  table(fact.best$Ctarg_ref_met)
+  table(fact.best$Ctarg_fin_met)
+
+  # Nsu ref target met yes/no (opposite direction of Y,C)
+  fact.best[dist_N.x>1, Ntarg_ref_met := 0]
+  fact.best[dist_N.x<1, Ntarg_ref_met := 1]
+  # SOC final target met yes/no
+  fact.best[dist_N_fin>1, Ntarg_fin_met := 0]
+  fact.best[dist_N_fin<1, Ntarg_fin_met := 1]
+
+  table(fact.best$Ntarg_ref_met)
+  table(fact.best$Ntarg_fin_met)
+
+  #subset to create raster for plots
+  fact.rast <- fact.best[,.(ncu,dist_Y.x,dist_C.x,dist_N.x,dist_Y_fin,dist_C_fin,dist_N_fin)]
+  fact.rast <- fact.best[,.(ncu,yield_ref,soc_ref,n_sp_ref)]
+
+  fact.best.mean <- aggregate(.~man_code,data=fact.cont.best,mean)
+
+  fwrite(fact.best.mean,paste0(floc,'fact.best.mean.csv'))
 
 
 # SCORE_SINGLE ----------------------------------------------------------------
