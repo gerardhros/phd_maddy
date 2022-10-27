@@ -21,7 +21,7 @@
 setwd('C:/phd_maddy/')
 
 # load packages
-require(readxl);require(data.table); require(dplyr)
+require(readxl);require(data.table); require(dplyr); library(plyr)
 
 # remove data
 rm(list=ls())
@@ -32,9 +32,9 @@ source('scripts/dst_functions_fert.r')
 # location of data objects not stored on github
 floc <- 'C:/dst_outputs/'
 
-#================================================
+#===============================================================================
 # connect databases, meta-models, site factors
-#================================================
+#===============================================================================
 
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
@@ -56,8 +56,19 @@ dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
 rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
 
-# create data table to summarize over mean of continuous variables
-# N critical is left out - MISSING VALUES AND VALUES PER CROP TYPE - NEEDS WEIGHTED MEAN PER NCU
+# save meta-models in table
+ma.models <- data.frame(ma_models$ma_mean,ma_models$ma_sd)
+fwrite(ma.models,paste0(floc,'ma.models.csv'))
+ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
+fwrite(ma.cov.models,paste0(floc,'ma.cov.models.csv'))
+
+
+#=====================================================================================
+# create data table to summarize factors (separate from simulation input)
+#=====================================================================================
+#
+#--------------DATA FOR FACTORS AND TARGETS MET------------------------------------------
+
 d1.fact <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
                              d1$yield_ref, d1$soc_ref, d1$n_sp_ref,
                              d1$yield_target, d1$soc_target,d1$n_sp_sw_crit, d1$n_sp_gw_crit))
@@ -66,26 +77,79 @@ colnames(d1.fact) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
 
 #add INITIAL distance to targets index
 d1.fact[, dist_Y := yield_ref / yield_target ]
-d1.fact[, dist_C := soc_ref / soc_target ]
-d1.fact[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
-d1.fact[is.na(dist_N), dist_N := 1]
 
+d1.fact[, dist_C := soc_ref / soc_target ]
+d1.fact[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999]
+d1.fact[is.na(n_sp_gw_crit), n_sp_gw_crit := 9999]
+d1.fact[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
 
 #remove Nsu critical columns due to missing values
-d1.fact.sub = subset(d1.fact, select = -c(n_sp_sw_crit,n_sp_gw_crit) )
+#d1.fact.sub = subset(d1.fact, select = -c(n_sp_sw_crit,n_sp_gw_crit) )
 #aggregate by ncu
 d1.fact.cont <- aggregate(.~ncu,d1.fact,mean)
 
-# save meta-models in table
-ma.models <- data.frame(ma_models$ma_mean)
-fwrite(ma.models,paste0(floc,'ma.models.csv'))
-ma.cov.models <- data.frame(ma_models$ma_cov_mean)
-fwrite(ma.cov.models,paste0(floc,'ma.cov.models.csv'))
+
+#----------------DATA FOR INITIAL TARGETS----------------------------------------
+d1.targ <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
+                            d1$yield_ref, d1$soc_ref, d1$n_sp_ref,
+                            d1$yield_target, d1$soc_target,d1$n_sp_sw_crit, d1$n_sp_gw_crit))
+colnames(d1.targ) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
+                       'yield_ref', 'soc_ref', 'n_sp_ref','yield_target', 'soc_target','n_sp_sw_crit', 'n_sp_gw_crit')
+
+d1.targ <- data.table(cbind(d1$ncu, d1$soc_target, d1$n_sp_sw_crit, d1$n_sp_gw_crit))
+colnames(d1.targ) <- c('ncu', 'soc_target','n_sp_sw_crit', 'n_sp_gw_crit')
+d1.targ[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999]
+d1.targ[is.na(n_sp_gw_crit), n_sp_gw_crit := 9999]
+d1.targ[,n_sp_crit:= pmin(n_sp_sw_crit,n_sp_gw_crit)]
+
+d1.targ <- aggregate(.~ncu,d1.targ,mean)
+
+# --------------- yield reference weighted mean by crop areas ------------------
+d1.yield <- data.table(cbind(d1$ncu,d1$area_ncu,d1$yield_ref))
+colnames(d1.yield) <- c('ncu', 'area_ncu', 'yield_ref')
+Yr_wm <- ddply(d1.yield, .(ncu), function(x) data.frame(yield_ref_w=weighted.mean(x$yield_ref, x$area_ncu)))
+
+d1.y.targ <- data.table(cbind(d1$ncu,d1$area_ncu,d1$yield_target))
+colnames(d1.y.targ) <- c('ncu', 'area_ncu', 'yield_target')
+Yt_wm <- ddply(d1.y.targ, .(ncu), function(x) data.frame(yield_targ_w=weighted.mean(x$yield_target, x$area_ncu)))
+
+d1.Yref.tar <- merge(Yr_wm,Yt_wm,by='ncu')
+as.data.table(d1.Yref.tar)
+d1.Yref.tar$dist_Y = d1.Yref.tar$yield_ref_w / d1.Yref.tar$yield_targ_w
+d1.Yref.tar$diff_Y = d1.Yref.tar$yield_targ_w - d1.Yref.tar$yield_ref_w
+
+
 
 #=====================================================================================
 # DST simulation for best measure and ranking of measures, ONE measure applied at time
 #=====================================================================================
 
+#default
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+
+#user weights yield
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(5,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(10,1,1),simyear = 5,quiet = FALSE,nmax=1)
+#user weights C
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,2,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,5,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,10,1),simyear = 5,quiet = FALSE,nmax=1)
+#user weights N
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,2),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,5),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,10),simyear = 5,quiet = FALSE,nmax=1)
+
+#adapt number of years
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 10,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 15,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 20,quiet = FALSE,nmax=1)
+
+#adapt time factor in function to 3/5 cumulative effects over time for yield
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+#adapt time factor to 2/5 cumulative effects for N surplus
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+#adapt time factor to 3/5 for yield and to 2/5 for N su
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 # IMPACT_BEST -----------------------------------------------------------------
@@ -99,9 +163,9 @@ out.best <- sim.all$impact_best
   #add new distance indices
   #add FINAL distance to targets index
 
-
   #summary over input/output parameters
   out.best.param <- aggregate(.~man_code,data=out.best,mean)
+
   #merge out.best with continuous site factors
   fact.best <- as.data.table(merge(d1.fact.cont,out.best,by='ncu'))
 
@@ -110,35 +174,64 @@ out.best <- sim.all$impact_best
   fact.best[, dist_N_fin := ((1+dNsu) * n_sp_ref) / pmin(n_sp_sw_crit,n_sp_gw_crit)]
   fact.best[is.na(dist_N_fin), dist_N_fin := 1]
 
+# PERCENTAGE YIELD TARGETS -----------------------------------------------------
+
   # Yield ref target met yes/no
   fact.best[dist_Y.x<1, targ_ref_met := 0]
   fact.best[dist_Y.x>1, targ_ref_met := 1]
+  fact.best[is.na(targ_ref_met), targ_ref_met := 0]
   # Yield final target met yes/no
   fact.best[dist_Y_fin<1, targ_fin_met := 0]
   fact.best[dist_Y_fin>1, targ_fin_met := 1]
+  fact.best[is.na(targ_fin_met), targ_fin_met := 0]
 
-  table(fact.best$targ_ref_met)
-  table(fact.best$targ_fin_met)
+  Yref <- data.table(table(fact.best$targ_ref_met))
+  Yfin <- data.table(table(fact.best$targ_fin_met))
+  #check of total NCUs = 29476
+  tot.NCU.Y = sum(Yref$N[2],Yref$N[1])
+  tot.NCU.Y = sum(Yfin$N[2],Yfin$N[1])
+  perc_Y_ref = Yref$N[2]/tot.NCU.Y
+  perc_Y_fin = Yfin$N[2]/tot.NCU.Y
+
+# PERCENTAGE SOC TARGETS -------------------------------------------------------
 
   # SOC ref target met yes/no
   fact.best[dist_C.x<1, Ctarg_ref_met := 0]
   fact.best[dist_C.x>1, Ctarg_ref_met := 1]
+  fact.best[is.na(Ctarg_ref_met), Ctarg_ref_met := 0]
   # SOC final target met yes/no
   fact.best[dist_C_fin<1, Ctarg_fin_met := 0]
   fact.best[dist_C_fin>1, Ctarg_fin_met := 1]
+  fact.best[is.na(Ctarg_fin_met), Ctarg_fin_met := 0]
 
-  table(fact.best$Ctarg_ref_met)
-  table(fact.best$Ctarg_fin_met)
+  Cref <- data.table(table(fact.best$Ctarg_ref_met))
+  Cfin <- data.table(table(fact.best$Ctarg_fin_met))
+  # !!! should be 29476 !!!
+  tot.NCU.C = sum(Cref$N[2],Cref$N[1])
+  tot.NCU.C = sum(Cfin$N[2],Cfin$N[1])
+  perc_C_ref = Cref$N[2]/tot.NCU.C
+  perc_C_fin = Cfin$N[2]/tot.NCU.C
+
+# PERCENTAGE N SURPLUS TARGETS -------------------------------------------------
 
   # Nsu ref target met yes/no (opposite direction of Y,C)
   fact.best[dist_N.x>1, Ntarg_ref_met := 0]
   fact.best[dist_N.x<1, Ntarg_ref_met := 1]
+  fact.best[is.na(Ntarg_ref_met), Ntarg_ref_met := 0]
   # SOC final target met yes/no
   fact.best[dist_N_fin>1, Ntarg_fin_met := 0]
   fact.best[dist_N_fin<1, Ntarg_fin_met := 1]
+  fact.best[is.na(Ntarg_fin_met), Ntarg_fin_met := 0]
 
-  table(fact.best$Ntarg_ref_met)
-  table(fact.best$Ntarg_fin_met)
+  Nref <- data.table(table(fact.best$Ntarg_ref_met))
+  Nfin <- data.table(table(fact.best$Ntarg_fin_met))
+  # !!! should be 29476 !!!
+  tot.NCU.N = sum(Nref$N[2],Nref$N[1])
+  tot.NCU.N = sum(Nfin$N[2],Nfin$N[1])
+  perc_N_ref = Nref$N[2]/tot.NCU.N
+  perc_N_fin = Nfin$N[2]/tot.NCU.N
+
+#-------------------------------------------------
 
   #subset to create raster for plots
   fact.rast <- fact.best[,.(ncu,dist_Y.x,dist_C.x,dist_N.x,dist_Y_fin,dist_C_fin,dist_N_fin)]
@@ -192,6 +285,7 @@ sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear =
 
   # best pair of TWO measures
   out.duo <- sim.all.2$score_duo
+  out.duo2 <- sim.all.2$impact_total
   #frequency of best measures - make table for single rankings
   rank.duo <- data.frame(table(out.duo$`1`))
   fwrite(rank.duo,paste0(floc,'rank.duo.csv'))
@@ -205,6 +299,86 @@ sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear =
 
   fact.duo <- aggregate(.~`1`,data=fact.cont.duo,mean)
   fwrite(fact.duo,paste0(floc,'fact.duo.csv'))
+
+  #-----------------------------------------------------------------------------
+  #  Calculate % targets met
+  #-----------------------------------------------------------------------------
+
+  #merge out.best with continuous site factors
+  fact.best <- as.data.table(merge(d1.fact.cont,out.duo,by='ncu'))
+
+  fact.best[, dist_Y_fin := ((1+dY) * yield_ref) / yield_target ]
+  fact.best[, dist_C_fin := ((1+dSOC) * soc_ref) / soc_target ]
+  fact.best[, dist_N_fin := ((1+dNsu) * n_sp_ref) / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+  fact.best[is.na(dist_N_fin), dist_N_fin := 1]
+
+  # PERCENTAGE YIELD TARGETS -----------------------------------------------------
+
+  # INITIAL Yield ref target met yes/no
+  fact.best[dist_Y.x<1, targ_ref_met := 0]
+  fact.best[dist_Y.x>1, targ_ref_met := 1]
+  fact.best[is.na(targ_ref_met), targ_ref_met := 0]
+  # FINAL Yield target met yes/no
+  fact.best[dist_Y_fin<1, targ_fin_met := 0]
+  fact.best[dist_Y_fin>1, targ_fin_met := 1]
+  fact.best[is.na(targ_fin_met), targ_fin_met := 0]
+
+  Yref <- data.table(table(fact.best$targ_ref_met))
+  Yfin <- data.table(table(fact.best$targ_fin_met))
+  # !!! should be 29476 !!!
+  tot.NCU.Y = sum(Yref$N[2],Yref$N[1])
+  tot.NCU.Y = sum(Yfin$N[2],Yfin$N[1])
+  perc_Y_ref = Yref$N[2]/tot.NCU.Y
+  perc_Y_fin = Yfin$N[2]/tot.NCU.Y
+
+  # PERCENTAGE SOC TARGETS -------------------------------------------------------
+
+  # INITIAL SOC ref target met yes/no
+  fact.best[dist_C.x<1, Ctarg_ref_met := 0]
+  fact.best[dist_C.x>1, Ctarg_ref_met := 1]
+  fact.best[is.na(Ctarg_ref_met), Ctarg_ref_met := 0]
+  # FINAL SOC target met yes/no
+  fact.best[dist_C_fin<1, Ctarg_fin_met := 0]
+  fact.best[dist_C_fin>1, Ctarg_fin_met := 1]
+  fact.best[is.na(Ctarg_fin_met), Ctarg_fin_met := 0]
+
+  Cref <- data.table(table(fact.best$Ctarg_ref_met))
+  Cfin <- data.table(table(fact.best$Ctarg_fin_met))
+  # !!! should be 29476 !!!
+  tot.NCU.C = sum(Cref$N[2],Cref$N[1])
+  tot.NCU.C = sum(Cfin$N[2],Cfin$N[1])
+  perc_C_ref = Cref$N[2]/tot.NCU.C
+  perc_C_fin = Cfin$N[2]/tot.NCU.C
+
+  # PERCENTAGE N SURPLUS TARGETS -------------------------------------------------
+
+  # Nsu ref target met yes/no (opposite direction of Y,C)
+  fact.best[dist_N.x>1, Ntarg_ref_met := 0]
+  fact.best[dist_N.x<1, Ntarg_ref_met := 1]
+  fact.best[is.na(Ntarg_ref_met), Ntarg_ref_met := 0]
+  # SOC final target met yes/no
+  fact.best[dist_N_fin>1, Ntarg_fin_met := 0]
+  fact.best[dist_N_fin<1, Ntarg_fin_met := 1]
+  fact.best[is.na(Ntarg_fin_met), Ntarg_fin_met := 0]
+
+  Nref <- data.table(table(fact.best$Ntarg_ref_met))
+  Nfin <- data.table(table(fact.best$Ntarg_fin_met))
+  # !!! should be 29476 !!!
+  tot.NCU.N = sum(Nref$N[2],Nref$N[1])
+  tot.NCU.N = sum(Nfin$N[2],Nfin$N[1])
+  perc_N_ref = Nref$N[2]/tot.NCU.N
+  perc_N_fin = Nfin$N[2]/tot.NCU.N
+
+  #-------------------------------------------------
+
+  #subset to create raster for plots
+  fact.rast <- fact.best[,.(ncu,dist_Y.x,dist_C.x,dist_N.x,dist_Y_fin,dist_C_fin,dist_N_fin)]
+  fact.rast <- fact.best[,.(ncu,yield_ref,soc_ref,n_sp_ref)]
+
+  fact.best.mean <- aggregate(.~man_code,data=fact.cont.best,mean)
+
+  fwrite(fact.best.mean,paste0(floc,'fact.best.mean.csv'))
+
 
 #=====================================================================================
 # DST simulation for THREE combined measures applied at once
@@ -226,6 +400,15 @@ sim.all.3 <- runDST(db = d1, dt.m = dt.m, output = 'score_trio',uw = c(1,1,1),si
 
 # output_total lists all possible combinations per ncu and impacts
 # not relevant to map but might be useful later to show different applications
+
+
+
+
+
+
+
+
+
 
 #=====================================================================================
 # Reference maps

@@ -66,19 +66,32 @@ terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
 #   out.best - values at t=5, etc.
 #   d1.fact.cont - values at t=0 and site properties from Integrator
 
-r.ncu <- merge(r1.p, fact.rast, by.x = 'gncu2010_ext', by.y = 'ncu')
+r.ncu <- merge(r1.p, d1.Yref.tar, by.x = 'gncu2010_ext', by.y = 'ncu')
 
 # set columns in right order for conversion to raster
 #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
 # set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref','soc_ref','n_sp_ref'))
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_w','yield_targ_w','dist_Y','diff_Y'))
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
-terra::writeRaster(r.fin,'products/fact.rast.tif', overwrite = TRUE)
+#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
+
+r.ncu <- merge(r1.p, d1.targ, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','soc_target','n_sp_crit','n_sp_sw_crit','n_sp_gw_crit'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
 
 
@@ -119,23 +132,23 @@ visualize <- function(raster, layer, name, breaks, labels, ftitle){
 #===============================================================================
 # yield REFERENCE (timestep 0)
 #===============================================================================
+# labels and breaks: breaks is a vector showing the cut between labels,
+# labels is a vector with strings how to describe the classes
+# name is a string being the text above the legend
 
 p1 <- visualize(raster = r.fin,
-                layer = 'yield_ref',
+                layer = 'diff_Y',
                 name = "Ref value",
                 breaks = c(0,2500,5000,7500,10000,12500,15000,17500,20000,22500,25000,27500,30000,32500,35000,37500,55000),
                 labels = c('<2500','2500-5000','5000-7500','7500-10000','10000-12500','12500-15000','15000-17500','17500-20000','20000-22500',
                            '22500-25000','25000-27500','27500-30000','30000-32500','32500-35000','35000-37500','37500-50000'),
                 ftitle = 'Yield (kg ha-1)')
-ggsave(filename = "products/yield_ref.png",
+ggsave(filename = "products/diff_Y.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #===============================================================================
 # soc REFERENCE (timestep 0)
 #===============================================================================
-# labels and breaks: breaks is a vector showing the cut between labels,
-# labels is a vector with strings how to describe the classes
-# name is a string being the text above the legend
 
 p1 <- visualize(raster = r.fin,
                 layer = 'soc_ref',
@@ -149,12 +162,6 @@ ggsave(filename = "products/soc_ref.png",
 #===============================================================================
 # Nsu REFERENCE (timestep 0)
 #===============================================================================
-#
-# breaks = c(0,0.5,1,2.5,5,10,20)
-# labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 20')
-#
-# breaks = c(0,2.5,5,7.5,10,15,20)
-# labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 15','15 - 20')
 
 p1 <- visualize(raster = r.fin,
                 layer = 'n_sp_ref',
@@ -168,25 +175,59 @@ ggsave(filename = "products/n_sp_ref.png",
 #===============================================================================
 # yield DISTANCE (INITIAL TIMESTEP 0)
 #===============================================================================
-# labels and breaks: breaks is a vector showing the cut between labels,
-# labels is a vector with strings how to describe the classes
-# name is a string being the text above the legend
 
 p1 <- visualize(raster = r.fin,
-                layer = 'dist_Y.x',
+                layer = 'diff_Y',
                 name = "Ref/Target",
                 breaks = c(0,1,1.25,1.5,1.75,2,2.5,3,4),
                 labels = c('< 1','1 - 1.25','1.25 - 1.5','1.5 - 1.75','1.75 - 2','2 - 2.5','2.5 - 3','3 - 4'),
                 ftitle = 'Yield distance to target (ratio)')
-ggsave(filename = "products/dist_Y_ref.png",
+ggsave(filename = "products/diff_Y_ref_w.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# yield TARGET (timestep 0)
+#===============================================================================
+
+p1 <- visualize(raster = r.fin,
+                layer = 'yield_targ_w',
+                name = "Target value",
+                breaks = c(0,2500,5000,7500,10000,12500,15000,17500,20000,22500,25000,27500,30000,32500,35000,37500,55000),
+                labels = c('<2500','2500-5000','5000-7500','7500-10000','10000-12500','12500-15000','15000-17500','17500-20000','20000-22500',
+                           '22500-25000','25000-27500','27500-30000','30000-32500','32500-35000','35000-37500','37500-50000'),
+                ftitle = 'Target yield (kg ha-1)')
+ggsave(filename = "products/targ_Y.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# soc TARGET (INITIAL TIMESTEP 0)
+#===============================================================================
+
+p1 <- visualize(raster = r.fin,
+                layer = 'soc_target',
+                name = "Target value",
+                breaks = c(0,1,1.1,1.2,1.3,1.4,1.5),
+                labels = c('1','1 - 1.1','1.1 - 1.2','1.2 - 1.3','1.3 - 1.4','1.4 - 1.5'),
+                ftitle = 'Target SOC (%)')
+ggsave(filename = "products/targ_C.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# Nsu TARGET (timestep 0)
+#===============================================================================
+
+p1 <- visualize(raster = r.fin,
+                layer = 'n_sp_crit',
+                name = "Critical limit",
+                breaks = c(0,25,50,75,100,150,10000),
+                labels = c('< 25','25 - 50','50 - 75','75 - 100','100 - 150','> 150'),
+                ftitle = 'Critical N surplus (kg ha-1)')
+ggsave(filename = "products/targ_N.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #===============================================================================
 # soc DISTANCE (INITIAL TIMESTEP 0)
 #===============================================================================
-# labels and breaks: breaks is a vector showing the cut between labels,
-# labels is a vector with strings how to describe the classes
-# name is a string being the text above the legend
 
 p1 <- visualize(raster = r.fin,
                 layer = 'dist_C.x',
@@ -198,16 +239,9 @@ ggsave(filename = "products/dist_C_ref.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
-
 #===============================================================================
 # Nsu distance (INITIAL TIMESTEP 0)
 #===============================================================================
-#
-# breaks = c(0,0.5,1,2.5,5,10,20)
-# labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 20')
-#
-# breaks = c(0,2.5,5,7.5,10,15,20)
-# labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 15','15 - 20')
 
 p1 <- visualize(raster = r.fin,
                 layer = 'dist_N.x',
@@ -223,18 +257,6 @@ ggsave(filename = "products/dist_N_ref.png",
 #===============================================================================
 # soc distance (FINAL TIMESTEP 5 YEARS)
 #===============================================================================
-# labels and breaks: breaks is a vector showing the cut between labels,
-# labels is a vector with strings how to describe the classes
-# name is a string being the text above the legend
-
-# labels = c('<1','1-2','2-3','3-4','4-5','5-10','10-15','15-20','20-25','25-30','30-40')
-# breaks = c(0,1,2,3,4,5,10,15,20,25,30,40)
-#
-# labels = c('<0.5','0.5-1','1-1.5','1.5-2','2-3','3-5','5-10','10-20','20-30','30-40')
-# breaks = c(0,0.5,1,1.5,2,3,5,10,20,30,40)
-#
-# labels = c('<0.5','0.5-1','1-1.5','1.5-3','3-5','5-10','10-20','20-30','30-40')
-# breaks = c(0,0.5,1,1.5,3,5,10,20,30,40)
 
 p1 <- visualize(raster = r.fin,
                 layer = 'dist_C',
@@ -248,12 +270,6 @@ ggsave(filename = "products/dist_SOC.png",
 #===============================================================================
 # Nsu distance (FINAL TIMESTEP 5 YEARS)
 #===============================================================================
-
-breaks = c(0,0.5,1,2.5,5,10,20)
-labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 20')
-
-breaks = c(0,2.5,5,7.5,10,15,20)
-labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 15','15 - 20')
 
 p1 <- visualize(raster = r.fin,
                 layer = 'dist_N',
