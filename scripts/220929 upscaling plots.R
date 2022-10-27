@@ -1,3 +1,6 @@
+
+setwd('C:/phd_maddy/')
+
 # plotting
 
 library(ggplot2)
@@ -43,6 +46,56 @@ terra::crs(r.fin) <- 'epsg:4326'
 terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
 r1 <- terra::rast('C:/phd_maddy/products/out.best.tif')
 r1.p <- as.data.frame(r1,xy=TRUE)
+
+
+#================================================
+# function from Gerard
+#================================================
+
+# visualisation function of a raster file (its a global plot, so it still uses
+# object world2 as starting point (similar as your first plot function for EU map)
+# the argument ftitle is a string with the title that you want to plot on top of the figure
+
+visualize <- function(raster, layer, name, breaks, labels, ftitle){
+  # select the correct layer
+  raster.int <- raster[layer]
+  #raster to xy
+  df <- as.data.frame(raster.int, xy = TRUE)
+  #colnames
+  colnames(df) <- c("x", "y", "variable")
+  #plot
+  ggplot() +
+    geom_sf(data = world2, color = "black", fill = "white",show.legend = FALSE) +
+    geom_tile(data = df, aes(x = x, y = y,fill = cut(variable, breaks,labels = labels))) +
+    plotcrs +
+    scale_fill_viridis_d() +
+    xlab("") + ylab("")+
+    #xlab("Longitude") + ylab("Latitude") +
+    labs(fill = name) +
+    theme(text = element_text(size = 12),
+          legend.position = c(0.1,0.4),
+          legend.background = element_rect(fill = "white",color='white'),
+          panel.border = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    ggtitle(ftitle)
+}
+
+# create plot for just P level for PSI target = 0.1
+# below an example
+# labels and breaks: breaks is a vector showing the cut between labels,
+# labels is a vector with strings how to describe the classes
+# name is a string being the text above the legend
+
+p1 <- visualize(raster = r.fin,
+                layer = 'pfert1',
+                name = "P dose\n(kg P / ha)",
+                breaks = c(-1000,5,50,100,500),
+                labels = c('<5','5-50','50-100','>100'),
+                ftitle = 'just P level with PSI target of 10%')
+ggsave(filename = "products/pfert_target1.png",
+       plot = plot.pfert1, width = 32, height = 24, units = c("cm"), dpi = 1200)
+
+
 #================================================
 # d yield
 #================================================
