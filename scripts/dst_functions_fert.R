@@ -295,6 +295,11 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # converts the list into a table (rowbind)
   dt.out <- rbindlist(dt.out)
 
+  # estimate whether the target has been met on NCU level
+  # dist_Y = current yield / yield target
+  dt.out[,tm_Y := fifelse(dist_Y >= 1 | dY >= (1 - dist_Y), 1,0)]
+  dt.out[,tm_C := fifelse(dist_C >= 1 | dSOC >= (1 - dist_C),1,0)]
+  dt.out[,tm_N := fifelse(dist_N <= 1 | dNsu <= (1 - dist_N),1,0)]
 
   # OUTPUT DATA COLLECTION
 
@@ -305,7 +310,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('total_impact|all',output))>0){
 
     # select relevant data and sort
-    pout1 <- dt.out[man_n == max(man_n),.(ncu,man_code,dY,dSOC,dNsu)]
+    pout1 <- dt.out[man_n == max(man_n),.(ncu,man_code,dY,dSOC,dNsu,tm_Y,tm_C,tm_N)]
     # pout1 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dSOC,dNsu)]
     setorder(pout1,ncu)
   } else {pout1 = NULL}
@@ -315,7 +320,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
-    pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
+    pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
@@ -325,10 +330,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('score_single|all',output))>0){
 
     # select relevant data and sort
-    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
     #  TO ADD THOSE columns
-    pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
+    pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
   } else {pout3 = NULL}
 
   # collect the ORDER/RANKING of TWO combinations of measures
@@ -337,9 +342,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # select relevant data and sort
     #SELECT NO. OF MEASURES 2; SELECT COLUMNS; OVERWRITE COLUMN BIPMCS (ORDER OF ALL COMBO MEASURES)
     #SO MAKING A SUBSET OF THIS BASED ON A CRITERIA; THEN RECALCULATE THE ORDER BASED ON "MISSING RANK VALUES"
-    pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
+    pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
 
     # pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # pout4 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
@@ -350,9 +355,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # collect the ORDER/RANKING of THREE combinations of measures
   if(sum(grepl('score_trio|all',output))>0 & nmax >= 3){
 
-    pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout5 <- dcast(pout5,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
+    pout5 <- dcast(pout5,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
   } else {pout5 = NULL}
 
   # THIS IS SAME AS POUT2 BUT FOR BEST COMBO
