@@ -18,7 +18,7 @@
 # set data sources
 #================================================
 
-setwd('C:/phd_maddy/')
+setwd('C:/phd_maddy')
 
 # load packages
 require(readxl);require(data.table); require(dplyr); library(plyr)
@@ -30,7 +30,7 @@ rm(list=ls())
 source('scripts/dst_functions_fert.r')
 
 # location of data objects not stored on github
-floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+floc <- 'C:/dst_outputs/'
 
 #===============================================================================
 # connect databases, meta-models, site factors
@@ -48,8 +48,8 @@ dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models)
 dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models)
 dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models)
-dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = TRUE)
-dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
+dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = FALSE)
+dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = FALSE)
 
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
@@ -86,7 +86,7 @@ d1.fact[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
 #remove Nsu critical columns due to missing values
 #d1.fact.sub = subset(d1.fact, select = -c(n_sp_sw_crit,n_sp_gw_crit) )
 #aggregate by ncu
-d1.fact.cont <- aggregate(.~ncu,d1.fact,mean)
+d1.fact <- aggregate(.~ncu,d1.fact,mean)
 
 
 #----------------DATA FOR INITIAL TARGETS----------------------------------------
@@ -125,7 +125,7 @@ d1.Yref.tar$diff_Y = d1.Yref.tar$yield_targ_w - d1.Yref.tar$yield_ref_w
 #=====================================================================================
 
 #default
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 #user weights yield
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
@@ -160,6 +160,36 @@ out.best <- sim.all$impact_best
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
 
+# FIGURES FOR one MEASURE OVER ALL EU-27------------------------------------
+
+  out.total <- sim.all$impact_total
+
+  d1.yield <- data.table(cbind(d1$ncu,d1$area_ncu,d1$yield_ref))
+  colnames(d1.yield) <- c('ncu', 'area_ncu', 'yield_ref')
+  Yr_wm <- ddply(d1.yield, .(ncu), function(x) data.frame(yield_ref_w=weighted.mean(x$yield_ref, x$area_ncu)))
+
+  #merge reference values with yield weighted mean and DSF output
+  dt.meas <- as.data.table(merge(d1.fact,Yr_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(dt.meas,out.total,by='ncu'))
+
+  #add change
+  dt.meas[, D_Y := ((1+dY) * yield_ref_w) - yield_ref_w ]
+  dt.meas[, D_SOC := ((1+dSOC) * soc_ref) - soc_ref ]
+  dt.meas[, D_Nsu := ((1+dNsu) * n_sp_ref) - n_sp_ref ]
+
+
+  dt.EE <- dt.meas[man_code == "EE"]
+  dt.CF <- dt.meas[man_code == "CF-MF"]
+  dt.OF <- dt.meas[man_code == "OF-MF"]
+  dt.RFR <- dt.meas[man_code == "RFR"]
+  dt.RFT <- dt.meas[man_code == "RFT"]
+  dt.RFP <- dt.meas[man_code == "RFP"]
+
+
+
+
+
+# testing % targets met for IMPACT_BEST ------------------------------------------------
   #add new distance indices
   #add FINAL distance to targets index
 
@@ -240,6 +270,7 @@ out.best <- sim.all$impact_best
   fact.best.mean <- aggregate(.~man_code,data=fact.cont.best,mean)
 
   fwrite(fact.best.mean,paste0(floc,'fact.best.mean.csv'))
+
 
 
 # SCORE_SINGLE ----------------------------------------------------------------
