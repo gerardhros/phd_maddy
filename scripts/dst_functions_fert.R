@@ -111,7 +111,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # adaptation for missing/ NA models
   d3[is.na(dY),dY := 0]
   d3[is.na(dSOC),dSOC := 0]
-  d3[is.na(dNsu),dSOC := 0]
+  d3[is.na(dNsu),dNsu := 0]
 
   # add metric for INITIAL distance to target for inspecting maps - check LINE 113, 260 FOR COL SELECTION in outputs
   d3[, dist_Y := yield_ref / yield_target ]
@@ -658,8 +658,8 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
     # we select the available covar model over the global model; when covar missing take global one
     # covar model at this point is average of the site properties applicable for that NCU
     dt.m1.fin <- merge(dt.m1,dt.cov.m1,by=c('ncu','indicator'))
-    dt.m1.fin[,mmean := fifelse(is.na(cov_mean),mean,cov_mean)] #IF COVARIATE MODEL IS NA THEN TAKE GLOBAL; BUT ABOVE CHANGED NAs to 0
-    dt.m1.fin[,msd := fifelse(is.na(cov_mean),sd,cov_sd)]
+    dt.m1.fin[,mmean := fifelse(cov_mean==0,mean,cov_mean)] #IF COVARIATE MODEL IS NA THEN TAKE GLOBAL; BUT ABOVE CHANGED NAs to 0
+    dt.m1.fin[,msd := fifelse(cov_mean==0,sd,cov_sd)] #MADDY NOW CHANGED IT TO REPLACE ZERO WITH GLOBAL MODELS
     dt.m1.fin <- dt.m1.fin[,.(ncu,ha_m1,indicator,man_code,mmean,msd)] #define final output = #NCUs * #indicators = 88000
 
   } else {

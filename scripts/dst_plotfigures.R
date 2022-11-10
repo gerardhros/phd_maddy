@@ -62,17 +62,11 @@ terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
 # link raster to different output sets
 #===============================================================================
 
-# with different input files
-#   out.best - values at t=5, etc.
-#   d1.fact.cont - values at t=0 and site properties from Integrator
-
 r.ncu <- merge(r1.p, d1.Yref.tar, by.x = 'gncu2010_ext', by.y = 'ncu')
-
 # set columns in right order for conversion to raster
 #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
 # set columns in right order for conversion to raster
 setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_w','yield_targ_w','dist_Y','diff_Y'))
-
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
@@ -81,18 +75,27 @@ terra::crs(r.fin) <- 'epsg:4326'
 
 
 r.ncu <- merge(r1.p, d1.targ, by.x = 'gncu2010_ext', by.y = 'ncu')
-
 # set columns in right order for conversion to raster
 #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
 # set columns in right order for conversion to raster
 setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','soc_target','n_sp_crit','n_sp_sw_crit','n_sp_gw_crit'))
-
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
 #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
+
+r.ncu <- merge(r1.p, dt.CF, by.x = 'gncu2010_ext', by.y = 'ncu')
+# set columns in right order for conversion to raster
+#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
 
 #===============================================================================
@@ -128,6 +131,110 @@ visualize <- function(raster, layer, name, breaks, labels, ftitle){
           plot.title = element_text(hjust = 0.5)) +
     ggtitle(ftitle)
 }
+
+#===============================================================================
+# applying CF on all EU-27
+#===============================================================================
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Y',
+                name = "Yield (kg ha-1)",
+                breaks = c(-100,100,200,300,400,500,600,700,800,900,1000,1100,2000),
+                labels = c('<100','100-200','200-300','300-400','400-500','500-600','600-700','700-800','800-900',
+                           '900-1000','1000-1100','1100-1200'),
+                ftitle = 'Additional crop yield from combined fertiliser')
+ggsave(filename = "products/D_Y_CF.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_SOC',
+                name = "SOC (%)",
+                breaks = c(-1,0.0005,0.001,0.003,0.5,1,2),
+                labels = c('< 0.0005','0.0005-0.001','0.001-0.003','0.003-0.5','0.5-1','1-1.5'),
+                ftitle = 'Additional SOC from combined fertiliser')
+ggsave(filename = "products/D_C_CF.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Nsu',
+                name = "N surplus (kg ha-1)",
+                breaks = c(-100,-50,-40,-30,-20,-10,0,10,20,30,100),
+                labels = c('< -50','-50 to -40','-40 to -30','-30 to -20','-20 to -10','-10 to 0','0 to 10','10 to 20','20 to 30','> 30'),
+                ftitle = 'Change in N surplus from combined fertiliser')
+ggsave(filename = "products/D_N_CF.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# applying RFP on all EU-27 (NULL effects for C and N)
+#===============================================================================
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Y',
+                name = "Yield (kg ha-1)",
+                breaks = c(-100,200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400),
+                labels = c('<200','200-400','400-600','600-800','800-1000','1000-1200','1200-1400','1400-1600','1600-1800',
+                           '1800-2000','2000-2200','2200-2400'),
+                ftitle = 'Additional crop yield from right fert. placement')
+ggsave(filename = "products/D_Y_RFP.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+#===============================================================================
+# applying OF on all EU-27
+#===============================================================================
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Y',
+                name = "Yield (kg ha-1)",
+                breaks = c(-100,100,200,300,400,500,600,800),
+                labels = c('<100','100-200','200-300','300-400','400-500','500-600','600-700'),
+                ftitle = 'Additional crop yield from organic fertiliser')
+ggsave(filename = "products/D_Y_OF.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_SOC',
+                name = "SOC (%)",
+                breaks = c(-1,0.0005,0.001,0.003,0.5,1,2),
+                labels = c('< 0.0005','0.0005-0.001','0.001-0.003','0.003-0.5','0.5-1','1-1.5'),
+                ftitle = 'Additional SOC from organic fertiliser')
+ggsave(filename = "products/D_C_OF.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Nsu',
+                name = "N surplus (kg ha-1)",
+                breaks = c(-50,-20,-15,-10,-5,0,5,10,50),
+                labels = c('< -20','-20 to -15','-15 to -10','-10 to -5','-5 to 0','0 to 5','5 to 10','> 10'),
+                ftitle = 'Change in N surplus from organic fertiliser')
+ggsave(filename = "products/D_N_OF.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+#===============================================================================
+# applying EE on all EU-27 (NULL effects for C)
+#===============================================================================
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Y',
+                name = "Yield (kg ha-1)",
+                breaks = c(-100,200,400,600,800,1000,1500,2000,2500,4000),
+                labels = c('<200','200-400','400-600','600-800','800-1000','1000-1500','1500-2000','2000-2500','>2500'),
+                ftitle = 'Additional crop yield from enhanced efficiency fert.')
+ggsave(filename = "products/D_Y_EE.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Nsu',
+                name = "N surplus (kg ha-1)",
+                breaks = c(-100,-60,-50,-40,-30,-20,-10,0,10,100),
+                labels = c('< -60','-60 to -50','-50 to -40','-40 to -30','-30 to -20','-20 to -10','-10 to 0','0 to 10','> 10'),
+                ftitle = 'Change in N surplus from enhanced efficiency fert.')
+ggsave(filename = "products/D_N_EE.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
 
 #===============================================================================
 # yield REFERENCE (timestep 0)
