@@ -39,9 +39,9 @@ floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
 d1 <- fread(paste0(floc,'db_final_europe.csv'))
-
+d1 <- d1[ncu<1000]
 # load the global AND covariate meta-models when available
-ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0-1_OF-Nsu.xlsx')
+ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_meas_0_1.xlsx')
 
 # join MA impact models for fertiliser measures
 dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models)
