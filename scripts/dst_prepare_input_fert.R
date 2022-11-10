@@ -254,4 +254,4 @@
     d4[,cov_soc := paste0('c',cov_soc)]
 
     # save file as csv
-    fwrite(d4,paste0(floc,'db_final_europe.csv'))
+    fwrite(d4,paste0(floc,'db_final_europe_y2.csv'))

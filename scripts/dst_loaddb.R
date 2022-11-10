@@ -47,7 +47,7 @@
 
   # setnames
   setnames(d1,c('country','crop','texture','ncu','area_ncu',
-                'yield_ref','yield_target','soc_ref','soc_target','n_sp_ref','n_sp_sw_crit','n_sp_gw_crit',
+                'yield_target','yield_ref','soc_ref','soc_target','n_sp_ref','n_sp_sw_crit','n_sp_gw_crit',
                 'density','cn','clay','ph','n_fert','n_man','n_fix','n_dep','n_covercrop',
                 'nh3_man','nh3_fert','n_leach_frac'))
 
