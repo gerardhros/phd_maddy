@@ -89,19 +89,21 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # simyear is only relevant for SOC where results are cumulative
   # converts from percentage change (from the ML models) to multiplied factor for yield, SOC and N surplus
 
-  d3[, dY := mmean_Y * 0.01]
+  # d3[, dY := mmean_Y * 0.01]
+  # d3[, dSOC := simyear * mmean_SOC * 0.01]
+  # d3[, dNsu := mmean_Nsu * 0.01]
+
+  #adapted Y accumulations - 1
+  d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
   d3[, dSOC := simyear * mmean_SOC * 0.01]
   d3[, dNsu := mmean_Nsu * 0.01]
-
-  #adapted Y and N accumulations - 1
-  # d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
-  # d3[, dSOC := simyear * mmean_SOC * 0.01]
-  # d3[, dNsu := (2/5)*simyear * mmean_Nsu * 0.01]
 
   #adapted Y and N accumulations - 2
   # d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
   # d3[, dSOC := simyear * mmean_SOC * 0.01]
-  # d3[, dNsu := mmean_Nsu * 0.01]
+  # d3[, dNsu := (2/5)*simyear * mmean_Nsu * 0.01]
+
+
 
   # prevent that the change in SOC due to manure input exceeds available C (kg ha-1 * 1000/ kg soil ha-1 = g C / kg soil * 0.1 = % SOC)
   # select combined and organic measures where SOC change is greater than zero
@@ -129,18 +131,18 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
   # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
-  d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
-  d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
-  d3[, sNsu := pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1)]
+  # d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
+  # d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
+  # d3[, sNsu := pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1)]
 
   # adding some weight to the scores even when targets met
-  # d3[, sY := pmax(0.1,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
-  # d3[, sSOC := pmax(0.1,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
-  # d3[, sNsu := pmax(0.1,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
+  d3[, sY := pmax(0.1,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
+  d3[, sSOC := pmax(0.1,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
+  d3[, sNsu := pmax(0.1,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
 
   # there are cases where the critical N surplus is missing.
   # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
-  d3[is.na(sNsu), sNsu := 5]
+  d3[is.na(sNsu), sNsu := 1]
 
   #EASILY REPLACE WITH s=1 to check outcomes without these functions
   #for results do not adapt the function itself
@@ -297,9 +299,20 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # estimate whether the target has been met on NCU level
   # dist_Y = current yield / yield target
+  # if target already met OR change in indicator will bring it above
   dt.out[,tm_Y := fifelse(dist_Y >= 1 | dY >= (1 - dist_Y), 1,0)]
   dt.out[,tm_C := fifelse(dist_C >= 1 | dSOC >= (1 - dist_C),1,0)]
   dt.out[,tm_N := fifelse(dist_N <= 1 | dNsu <= (1 - dist_N),1,0)]
+
+  # compare to initial targets met
+  dt.out[,ti_Y := fifelse(dist_Y >= 1,1,0)]
+  dt.out[,ti_C := fifelse(dist_C >= 1,1,0)]
+  dt.out[,ti_N := fifelse(dist_N <= 1,1,0)]
+
+  # dt.out[,dist_Yt :=  yield_ref_w / yield_targ_w ]
+  # d2.yRT$dist_Yt = d2.yRT$yield_targ_w / d2.yRT$yield_ref_w
+  # d2.yRT$diff_Y = d2.yRT$yield_targ_w - d2.yRT$yield_ref_w
+  # d2.yRT$perc_Yt = (d2.yRT$yield_targ_w - d2.yRT$yield_ref_w)/d2.yRT$yield_targ_w
 
   # OUTPUT DATA COLLECTION
 
@@ -320,7 +333,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
-    pout2 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N)]
+    pout2 <- dt.out[bipmcs==6,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,ti_Y,ti_C,ti_N)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
@@ -330,10 +343,13 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('score_single|all',output))>0){
 
     # select relevant data and sort
-    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout3 <- dt.out[man_n == 1,.(ncu,man_code,bipmcs,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    #,tm_Y,tm_C,tm_N
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
     #  TO ADD THOSE columns
-    pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
+    pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
+    #+tm_Y+tm_C+tm_N
+    # pout3 <- dcast(pout3,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
   } else {pout3 = NULL}
 
   # collect the ORDER/RANKING of TWO combinations of measures

@@ -38,8 +38,15 @@ floc <- 'C:/dst_outputs/'
 
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
+<<<<<<< HEAD
 d1 <- fread(paste0(floc,'db_final_europe.csv'))
 d1 <- d1[ncu<1000]
+=======
+d1 <- fread(paste0(floc,'db_final_europe_y2.csv'))
+d2 <- fread(paste0(floc,'db_final_europe_y2.csv'))
+
+
+>>>>>>> 4f3a41b14b56e864bcaf14296b719ec97b38371d
 # load the global AND covariate meta-models when available
 ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_meas_0_1.xlsx')
 
@@ -48,8 +55,8 @@ dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models)
 dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models)
 dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models)
-dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = FALSE)
-dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = FALSE)
+dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = TRUE)
+dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
 
 # combine all measures and their impacts into one data.table
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
@@ -104,20 +111,48 @@ d1.targ[,n_sp_crit:= pmin(n_sp_sw_crit,n_sp_gw_crit)]
 
 d1.targ <- aggregate(.~ncu,d1.targ,mean)
 
+
 # --------------- yield reference weighted mean by crop areas ------------------
-d1.yield <- data.table(cbind(d1$ncu,d1$area_ncu,d1$yield_ref))
-colnames(d1.yield) <- c('ncu', 'area_ncu', 'yield_ref')
-Yr_wm <- ddply(d1.yield, .(ncu), function(x) data.frame(yield_ref_w=weighted.mean(x$yield_ref, x$area_ncu)))
 
-d1.y.targ <- data.table(cbind(d1$ncu,d1$area_ncu,d1$yield_target))
-colnames(d1.y.targ) <- c('ncu', 'area_ncu', 'yield_target')
-Yt_wm <- ddply(d1.y.targ, .(ncu), function(x) data.frame(yield_targ_w=weighted.mean(x$yield_target, x$area_ncu)))
+d2[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999]
+d2[is.na(n_sp_gw_crit), n_sp_gw_crit := 9999]
+d2[,n_sp_crit:= pmin(n_sp_sw_crit,n_sp_gw_crit)]
+d2[n_sp_crit==9999,n_sp_crit:= 25]
 
-d1.Yref.tar <- merge(Yr_wm,Yt_wm,by='ncu')
-as.data.table(d1.Yref.tar)
-d1.Yref.tar$dist_Y = d1.Yref.tar$yield_ref_w / d1.Yref.tar$yield_targ_w
-d1.Yref.tar$diff_Y = d1.Yref.tar$yield_targ_w - d1.Yref.tar$yield_ref_w
+d2.Yr <- data.table(cbind(d2$ncu,d2$area_ncu,d2$yield_ref))
+colnames(d2.Yr) <- c('ncu', 'area_ncu', 'yield_ref')
+Yr_wm <- ddply(d2.Yr, .(ncu), function(x) data.frame(yield_ref_w=weighted.mean(x$yield_ref, x$area_ncu)))
 
+d2.Yt <- data.table(cbind(d2$ncu,d2$area_ncu,d2$yield_target))
+colnames(d2.Yt) <- c('ncu', 'area_ncu', 'yield_target')
+Yt_wm <- ddply(d2.Yt, .(ncu), function(x) data.frame(yield_targ_w=weighted.mean(x$yield_target, x$area_ncu)))
+
+d2.yRT <- merge(Yr_wm,Yt_wm,by='ncu')
+as.data.table(d2.yRT)
+d2.yRT$dist_Y = d2.yRT$yield_ref_w / d2.yRT$yield_targ_w
+d2.yRT$dist_Yt = d2.yRT$yield_targ_w / d2.yRT$yield_ref_w
+d2.yRT$diff_Y = d2.yRT$yield_targ_w - d2.yRT$yield_ref_w
+d2.yRT$perc_Yt = (d2.yRT$yield_targ_w - d2.yRT$yield_ref_w)/d2.yRT$yield_targ_w
+
+
+# --------------- N surplus reference weighted mean by crop areas ------------------
+d2.Nr <- data.table(cbind(d2$ncu,d2$area_ncu,d2$n_sp_ref))
+colnames(d2.Nr) <- c('ncu', 'area_ncu', 'n_sp_ref')
+Nr_wm <- ddply(d2.Nr, .(ncu), function(x) data.frame(n_sp_ref_w=weighted.mean(x$n_sp_ref, x$area_ncu)))
+
+d2.Nt <- data.table(cbind(d2$ncu,d2$area_ncu,d2$n_sp_crit))
+colnames(d2.Nt) <- c('ncu', 'area_ncu', 'n_sp_crit')
+Nt_wm <- ddply(d2.Nt, .(ncu), function(x) data.frame(n_sp_crit_w=weighted.mean(x$n_sp_crit, x$area_ncu)))
+
+d2.nRT <- merge(Nr_wm,Nt_wm,by='ncu')
+as.data.table(d2.nRT)
+d2.nRT$dist_N = d2.nRT$n_sp_ref_w / d2.nRT$n_sp_crit_w
+d2.nRT$diff_N = d2.nRT$n_sp_crit_w - d2.nRT$n_sp_ref_w
+
+# figures
+#merge reference values with yield and Nsu weighted means and DSF output
+dt.meas <- as.data.table(merge(d1.fact,d2.yRT,by='ncu'))
+dt.meas <- as.data.table(merge(dt.meas,d2.nRT,by='ncu'))
 
 
 #=====================================================================================
@@ -125,32 +160,39 @@ d1.Yref.tar$diff_Y = d1.Yref.tar$yield_targ_w - d1.Yref.tar$yield_ref_w
 #=====================================================================================
 
 #default
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
 
 #user weights yield
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(5,1,1),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(10,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(5,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(100,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(100,1,1),simyear = 5,quiet = FALSE,nmax=1)
 #user weights C
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,2,1),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,5,1),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,10,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,2,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,5,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,10,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,100,1),simyear = 5,quiet = FALSE,nmax=1)
+
 #user weights N
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,2),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,5),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,10),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,2),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,5),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,10),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,100),simyear = 5,quiet = FALSE,nmax=1)
 
 #adapt number of years
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 10,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 15,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 20,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 10,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 15,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 20,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 100,quiet = FALSE,nmax=1)
 
 #adapt time factor in function to 3/5 cumulative effects over time for yield
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 #adapt time factor to 2/5 cumulative effects for N surplus
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
-#adapt time factor to 3/5 for yield and to 2/5 for N su
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+#adapt time factor to 3/5 for yield and to 2/5 for N surplus
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 # IMPACT_BEST -----------------------------------------------------------------
 
@@ -160,16 +202,41 @@ out.best <- sim.all$impact_best
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
 
+  Y_initial <- sum(out.best$ti_Y)/29476
+  Y_final <- sum(out.best$tm_Y)/29476
+
+  C_initial <- sum(out.best$ti_C)/29476
+  C_final <- sum(out.best$tm_C)/29476
+
+  N_initial <- sum(out.best$ti_N)/29476
+  N_final <- sum(out.best$tm_N)/29476
+
+
+  dt.meas <- as.data.table(merge(dt.meas,out.best,by='ncu'))
+
+  #merge reference values with weighted means and DSF output
+  dt.meas <- as.data.table(merge(d1.fact,Yr_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(dt.meas,Yt_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(d1.fact,Nr_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(dt.meas,Nt_wm,by='ncu'))
+  fact.best <- as.data.table(merge(dt.meas,out.best,by='ncu'))
+
+  fact.best <- fact.best[,.(man_code.x,ncu,density,cn,clay,ph,yield_ref_w,yield_targ_w,soc_ref,
+            soc_target,n_sp_ref_w,n_sp_crit_w,dist_Y.x,dist_C.x,dist_N.x,dY.x,dSOC.x,dNsu.x,
+            ti_Y.x,ti_C.x,ti_N.x,tm_Y.x,tm_C.x,tm_N.x)]
+
+  fact.best.mean <- aggregate(.~man_code.x,data=fact.best,mean)
+
+  fwrite(fact.best.mean,paste0(floc,'fact.best.mean2.csv'))
+
+
 # FIGURES FOR one MEASURE OVER ALL EU-27------------------------------------
 
   out.total <- sim.all$impact_total
 
-  d1.yield <- data.table(cbind(d1$ncu,d1$area_ncu,d1$yield_ref))
-  colnames(d1.yield) <- c('ncu', 'area_ncu', 'yield_ref')
-  Yr_wm <- ddply(d1.yield, .(ncu), function(x) data.frame(yield_ref_w=weighted.mean(x$yield_ref, x$area_ncu)))
 
-  #merge reference values with yield weighted mean and DSF output
-  dt.meas <- as.data.table(merge(d1.fact,Yr_wm,by='ncu'))
+
+
   dt.meas <- as.data.table(merge(dt.meas,out.total,by='ncu'))
 
   #add change
@@ -196,8 +263,12 @@ out.best <- sim.all$impact_best
   #summary over input/output parameters
   out.best.param <- aggregate(.~man_code,data=out.best,mean)
 
-  #merge out.best with continuous site factors
-  fact.best <- as.data.table(merge(d1.fact.cont,out.best,by='ncu'))
+  #merge reference values with weighted means and DSF output
+  dt.meas <- as.data.table(merge(d1.fact,Yr_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(dt.meas,Yt_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(d1.fact,Nr_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(dt.meas,Nt_wm,by='ncu'))
+  fact.best <- as.data.table(merge(dt.meas,out.best,by='ncu'))
 
   fact.best[, dist_Y_fin := ((1+dY) * yield_ref) / yield_target ]
   fact.best[, dist_C_fin := ((1+dSOC) * soc_ref) / soc_target ]
@@ -208,11 +279,11 @@ out.best <- sim.all$impact_best
 
   # Yield ref target met yes/no
   fact.best[dist_Y.x<1, targ_ref_met := 0]
-  fact.best[dist_Y.x>1, targ_ref_met := 1]
+  fact.best[dist_Y.x>=1, targ_ref_met := 1]
   fact.best[is.na(targ_ref_met), targ_ref_met := 0]
   # Yield final target met yes/no
   fact.best[dist_Y_fin<1, targ_fin_met := 0]
-  fact.best[dist_Y_fin>1, targ_fin_met := 1]
+  fact.best[dist_Y_fin>=1, targ_fin_met := 1]
   fact.best[is.na(targ_fin_met), targ_fin_met := 0]
 
   Yref <- data.table(table(fact.best$targ_ref_met))
@@ -227,11 +298,11 @@ out.best <- sim.all$impact_best
 
   # SOC ref target met yes/no
   fact.best[dist_C.x<1, Ctarg_ref_met := 0]
-  fact.best[dist_C.x>1, Ctarg_ref_met := 1]
+  fact.best[dist_C.x>=1, Ctarg_ref_met := 1]
   fact.best[is.na(Ctarg_ref_met), Ctarg_ref_met := 0]
   # SOC final target met yes/no
   fact.best[dist_C_fin<1, Ctarg_fin_met := 0]
-  fact.best[dist_C_fin>1, Ctarg_fin_met := 1]
+  fact.best[dist_C_fin>=1, Ctarg_fin_met := 1]
   fact.best[is.na(Ctarg_fin_met), Ctarg_fin_met := 0]
 
   Cref <- data.table(table(fact.best$Ctarg_ref_met))
@@ -246,11 +317,11 @@ out.best <- sim.all$impact_best
 
   # Nsu ref target met yes/no (opposite direction of Y,C)
   fact.best[dist_N.x>1, Ntarg_ref_met := 0]
-  fact.best[dist_N.x<1, Ntarg_ref_met := 1]
+  fact.best[dist_N.x<=1, Ntarg_ref_met := 1]
   fact.best[is.na(Ntarg_ref_met), Ntarg_ref_met := 0]
   # SOC final target met yes/no
   fact.best[dist_N_fin>1, Ntarg_fin_met := 0]
-  fact.best[dist_N_fin<1, Ntarg_fin_met := 1]
+  fact.best[dist_N_fin<=1, Ntarg_fin_met := 1]
   fact.best[is.na(Ntarg_fin_met), Ntarg_fin_met := 0]
 
   Nref <- data.table(table(fact.best$Ntarg_ref_met))
@@ -261,13 +332,17 @@ out.best <- sim.all$impact_best
   perc_N_ref = Nref$N[2]/tot.NCU.N
   perc_N_fin = Nfin$N[2]/tot.NCU.N
 
+
+
+
+
 #-------------------------------------------------
 
   #subset to create raster for plots
   fact.rast <- fact.best[,.(ncu,dist_Y.x,dist_C.x,dist_N.x,dist_Y_fin,dist_C_fin,dist_N_fin)]
   fact.rast <- fact.best[,.(ncu,yield_ref,soc_ref,n_sp_ref)]
 
-  fact.best.mean <- aggregate(.~man_code,data=fact.cont.best,mean)
+  fact.best.mean <- aggregate(.~man_code,data=fact.best,mean)
 
   fwrite(fact.best.mean,paste0(floc,'fact.best.mean.csv'))
 
@@ -290,10 +365,10 @@ out.single$concat <- paste(out.single$`1`,out.single$`2`,out.single$`3`,
   #summary over input/output parameters
   out.single.param <- aggregate(.~concat,data=out.single.stat,mean)
   #merge with continuous site factors and save
-  fact.cont.single <- merge(d1.fact.cont,out.single.stat,by='ncu')
-  fact.cont.single <- merge(fact.cont.single,rank.single,by='concat')
+  fact.single <- merge(d1.fact,out.single.stat,by='ncu')
+  fact.single <- merge(fact.single,rank.single,by='concat')
 
-  fact.single <- aggregate(.~concat,data=fact.cont.single,mean)
+  fact.single <- aggregate(.~concat,data=fact.single,mean)
 
   fwrite(fact.single,paste0(floc,'fact.single.csv'))
 
@@ -312,7 +387,7 @@ out.single$concat <- paste(out.single$`1`,out.single$`2`,out.single$`3`,
 #=====================================================================================
 # DST simulation for TWO combined measures applied at once
 #=====================================================================================
-sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
 
   # best pair of TWO measures
   out.duo <- sim.all.2$score_duo
@@ -320,7 +395,7 @@ sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear =
   #frequency of best measures - make table for single rankings
   rank.duo <- data.frame(table(out.duo$`1`))
   fwrite(rank.duo,paste0(floc,'rank.duo.csv'))
-  colnames(rank.single) <- c('concat', 'freq')
+  colnames(rank.duo) <- c('concat', 'freq')
 
   #select columns to summarize continuous variables
   out.duo.stat <- out.duo[,.(ncu,`1`,dist_Y,dist_C,dist_N)]

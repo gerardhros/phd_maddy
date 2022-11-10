@@ -50,7 +50,7 @@ r.ncu[man_code == 'RFT' , man_num := 5]
 r.ncu[man_code == 'RFP' , man_num := 6]
 
 # set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num'))
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
@@ -62,11 +62,11 @@ terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
 # link raster to different output sets
 #===============================================================================
 
-r.ncu <- merge(r1.p, d1.Yref.tar, by.x = 'gncu2010_ext', by.y = 'ncu')
+r.ncu <- merge(r1.p, dt.meas, by.x = 'gncu2010_ext', by.y = 'ncu')
 # set columns in right order for conversion to raster
 #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
 # set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_w','yield_targ_w','dist_Y','diff_Y'))
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_w','yield_targ_w','perc_Yt'))
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
@@ -86,7 +86,7 @@ terra::crs(r.fin) <- 'epsg:4326'
 #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
 
-r.ncu <- merge(r1.p, dt.CF, by.x = 'gncu2010_ext', by.y = 'ncu')
+r.ncu <- merge(r1.p, dt.RFP, by.x = 'gncu2010_ext', by.y = 'ncu')
 # set columns in right order for conversion to raster
 #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
 # set columns in right order for conversion to raster
@@ -125,7 +125,7 @@ visualize <- function(raster, layer, name, breaks, labels, ftitle){
     labs(fill = name) +
     theme(text = element_text(size = 18),
           legend.text=element_text(size=12),
-          legend.position = c(0.1,0.8),
+          legend.position = c(0.01,0.75),
           legend.background = element_rect(fill = "white",color='white'),
           panel.border = element_blank(),
           plot.title = element_text(hjust = 0.5)) +
@@ -133,36 +133,56 @@ visualize <- function(raster, layer, name, breaks, labels, ftitle){
 }
 
 #===============================================================================
+# applying RFT on all EU-27 (NULL effects for C)
+#===============================================================================
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Y',
+                name = "Yield (kg ha-1)",
+                breaks = c(-100,100,200,300,400,600,800,1000,1500,2000,4000),
+                labels = c('<100','100-200','200-300','300-400','400-600','600-800','800-1000','1000-1500','1500-2000','>2000'),
+                ftitle = 'Additional crop yield from right fert. timing')
+ggsave(filename = "products/D_Y_RFT2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Nsu',
+                name = "N surplus (kg ha-1)",
+                breaks = c(-100,-40,-30,-25,-20,-15,-10,-5,100),
+                labels = c('< -40','-40 to -30','-30 to -25', '-25 to -20','-20 to -15','-15 to 10','-10 to -5','-5 to 0'),
+                ftitle = 'Change in N surplus from right fert. timing')
+ggsave(filename = "products/D_N_RFT2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
 # applying CF on all EU-27
 #===============================================================================
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Y',
                 name = "Yield (kg ha-1)",
-                breaks = c(-100,100,200,300,400,500,600,700,800,900,1000,1100,2000),
-                labels = c('<100','100-200','200-300','300-400','400-500','500-600','600-700','700-800','800-900',
-                           '900-1000','1000-1100','1100-1200'),
-                ftitle = 'Additional crop yield from combined fertiliser')
-ggsave(filename = "products/D_Y_CF.png",
+                breaks = c(-10000,-2000,-1000,500,0,200,400,600,2000),
+                labels = c('< -2000','-2000 to -1000','-1000 to 500','-500 to 0','0 to 200','200 to 400','400 to 600','>600'),
+                ftitle = 'Change in crop yield from combined fertiliser')
+ggsave(filename = "products/D_Y_CF2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
 p1 <- visualize(raster = r.fin,
                 layer = 'D_SOC',
                 name = "SOC (%)",
-                breaks = c(-1,0.0005,0.001,0.003,0.5,1,2),
-                labels = c('< 0.0005','0.0005-0.001','0.001-0.003','0.003-0.5','0.5-1','1-1.5'),
+                breaks = c(-1,0.0005,0.001,0.003,0.01,0.1,2),
+                labels = c('< 0.0005','0.0005-0.001','0.001-0.003','0.003-0.01','0.01-0.1','>0.1'),
                 ftitle = 'Additional SOC from combined fertiliser')
-ggsave(filename = "products/D_C_CF.png",
+ggsave(filename = "products/D_C_CF2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Nsu',
                 name = "N surplus (kg ha-1)",
-                breaks = c(-100,-50,-40,-30,-20,-10,0,10,20,30,100),
-                labels = c('< -50','-50 to -40','-40 to -30','-30 to -20','-20 to -10','-10 to 0','0 to 10','10 to 20','20 to 30','> 30'),
+                breaks = c(-100,-50,-40,-30,-20,-15,-10,-5,100),
+                labels = c('< -50','-50 to -40','-40 to -30','-30 to -20','-20 to -15','-15 to -10','-10 to -5','-5 to 0'),
                 ftitle = 'Change in N surplus from combined fertiliser')
-ggsave(filename = "products/D_N_CF.png",
+ggsave(filename = "products/D_N_CF2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #===============================================================================
@@ -171,11 +191,10 @@ ggsave(filename = "products/D_N_CF.png",
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Y',
                 name = "Yield (kg ha-1)",
-                breaks = c(-100,200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400),
-                labels = c('<200','200-400','400-600','600-800','800-1000','1000-1200','1200-1400','1400-1600','1600-1800',
-                           '1800-2000','2000-2200','2200-2400'),
+                breaks = c(-100,100,200,300,400,500,600,700,800,900,2400),
+                labels = c('<100','100-200','200-300','300-400','400-500','500-600','600-700','700-800','800-900','>900'),
                 ftitle = 'Additional crop yield from right fert. placement')
-ggsave(filename = "products/D_Y_RFP.png",
+ggsave(filename = "products/D_Y_RFP2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
@@ -185,30 +204,30 @@ ggsave(filename = "products/D_Y_RFP.png",
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Y',
                 name = "Yield (kg ha-1)",
-                breaks = c(-100,100,200,300,400,500,600,800),
-                labels = c('<100','100-200','200-300','300-400','400-500','500-600','600-700'),
-                ftitle = 'Additional crop yield from organic fertiliser')
-ggsave(filename = "products/D_Y_OF.png",
+                breaks = c(-800,-200,-100,-50,0,50,100,200,300,800),
+                labels = c('< -200','-200 to -100','-100 to -50','-50 to 0','0 to 50','50 to 100','100 to 200','200 to 300','> 300'),
+                ftitle = 'Change in crop yield from organic fertiliser')
+ggsave(filename = "products/D_Y_OF2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
 p1 <- visualize(raster = r.fin,
                 layer = 'D_SOC',
                 name = "SOC (%)",
-                breaks = c(-1,0.0005,0.001,0.003,0.5,1,2),
-                labels = c('< 0.0005','0.0005-0.001','0.001-0.003','0.003-0.5','0.5-1','1-1.5'),
-                ftitle = 'Additional SOC from organic fertiliser')
-ggsave(filename = "products/D_C_OF.png",
+                breaks = c(-1,0.0005,0.001,0.003,0.01,0.1,2),
+                labels = c('< 0.0005','0.0005-0.001','0.001-0.003','0.003-0.01','0.01-0.1','>0.1'),
+                ftitle = 'Change in SOC from organic fertiliser')
+ggsave(filename = "products/D_C_OF2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Nsu',
                 name = "N surplus (kg ha-1)",
-                breaks = c(-50,-20,-15,-10,-5,0,5,10,50),
-                labels = c('< -20','-20 to -15','-15 to -10','-10 to -5','-5 to 0','0 to 5','5 to 10','> 10'),
+                breaks = c(-50,-20,-15,-12.5,-10,-7.5,-5,-2.5,50),
+                labels = c('< -20','-20 to -15','-15 to -12.5','-12.5 to -10','-10 to -7.5','-7.5 to -5','-5 to -2.5','-2.5 to 0'),
                 ftitle = 'Change in N surplus from organic fertiliser')
-ggsave(filename = "products/D_N_OF.png",
+ggsave(filename = "products/D_N_OF2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
@@ -218,52 +237,120 @@ ggsave(filename = "products/D_N_OF.png",
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Y',
                 name = "Yield (kg ha-1)",
-                breaks = c(-100,200,400,600,800,1000,1500,2000,2500,4000),
-                labels = c('<200','200-400','400-600','600-800','800-1000','1000-1500','1500-2000','2000-2500','>2500'),
+                breaks = c(-100,100,200,300,400,600,800,1000,1500,2000,4000),
+                labels = c('<100','100-200','200-300','300-400','400-600','600-800','800-1000','1000-1500','1500-2000','>2000'),
                 ftitle = 'Additional crop yield from enhanced efficiency fert.')
-ggsave(filename = "products/D_Y_EE.png",
+ggsave(filename = "products/D_Y_EE2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
 p1 <- visualize(raster = r.fin,
                 layer = 'D_Nsu',
                 name = "N surplus (kg ha-1)",
-                breaks = c(-100,-60,-50,-40,-30,-20,-10,0,10,100),
-                labels = c('< -60','-60 to -50','-50 to -40','-40 to -30','-30 to -20','-20 to -10','-10 to 0','0 to 10','> 10'),
+                breaks = c(-100,-50,-40,-30,-25,-20,-15,-10,-5,100),
+                labels = c('< -50','-50 to -40','-40 to -30','-30 to -25', '-25 to -20','-20 to -15','-15 to 10','-10 to -5','-5 to 0'),
                 ftitle = 'Change in N surplus from enhanced efficiency fert.')
-ggsave(filename = "products/D_N_EE.png",
+ggsave(filename = "products/D_N_EE2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# applying RFR on all EU-27 (NULL effects for C)
+#===============================================================================
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Y',
+                name = "Yield (kg ha-1)",
+                breaks = c(-1000,-350,-250,-200,-150,-125,-100,-75,-50,-25,50),
+                labels = c('< -350','-350 to -250','-250 to -200','-200 to -150','-150 to -125','-125 to -100','-100 to -75','-75 to -50','-50 to -25','-25 to 0'),
+                ftitle = 'Reduction in crop yield from reduced fert. rate')
+ggsave(filename = "products/D_Y_RFR2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_SOC',
+                name = "SOC (%)",
+                breaks = c(-1,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,1),
+                labels = c('<0.1','0.01-0.02','0.02-0.03','0.03-0.04','0.04-0.05','0.05-0.06','0.06-0.07','0.07-0.08','0.08-0.09','0.09-0.1','>0.6'),
+                ftitle = 'Change in SOC from reduced fert. rate')
+ggsave(filename = "products/D_C_RFR2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'D_Nsu',
+                name = "N surplus (kg ha-1)",
+                breaks = c(-100,-50,-40,-30,-25,-20,-15,-10,100),
+                labels = c('< -50','-50 to -40','-40 to -30','-30 to -25', '-25 to -20','-20 to -15','-15 to -10','-10 to 0'),
+                ftitle = 'Change in N surplus from reduced fert. rate')
+ggsave(filename = "products/D_N_RFR2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 
 
 #===============================================================================
-# yield REFERENCE (timestep 0)
+# yield REFERENCE (timestep 0) and TARGET
 #===============================================================================
 # labels and breaks: breaks is a vector showing the cut between labels,
 # labels is a vector with strings how to describe the classes
 # name is a string being the text above the legend
 
 p1 <- visualize(raster = r.fin,
-                layer = 'diff_Y',
-                name = "Ref value",
+                layer = 'yield_ref_w',
+                name = "Ref. (kg ha-1)",
                 breaks = c(0,2500,5000,7500,10000,12500,15000,17500,20000,22500,25000,27500,30000,32500,35000,37500,55000),
                 labels = c('<2500','2500-5000','5000-7500','7500-10000','10000-12500','12500-15000','15000-17500','17500-20000','20000-22500',
                            '22500-25000','25000-27500','27500-30000','30000-32500','32500-35000','35000-37500','37500-50000'),
-                ftitle = 'Yield (kg ha-1)')
-ggsave(filename = "products/diff_Y.png",
+                ftitle = 'Current crop yield')
+ggsave(filename = "products/yield_ref_w.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'yield_targ_w',
+                name = "Targ. (kg ha-1)",
+                breaks = c(0,2500,5000,7500,10000,12500,15000,17500,20000,22500,25000,27500,30000,32500,35000,37500,55000),
+                labels = c('<2500','2500-5000','5000-7500','7500-10000','10000-12500','12500-15000','15000-17500','17500-20000','20000-22500',
+                           '22500-25000','25000-27500','27500-30000','30000-32500','32500-35000','35000-37500','37500-50000'),
+                ftitle = 'Target crop yield')
+ggsave(filename = "products/yield_targ_w.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_Y.y',
+                name = "Ratio (ref./targ.)",
+                breaks = c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.2),
+                labels = c('<0.1','0.1-0.2','0.2-0.3','0.3-0.4','0.4-0.5','0.5-0.6','0.6-0.7','0.7-0.8','0.8-0.9',
+                           '0.9-1.0'),
+                ftitle = 'Distance to target yield')
+ggsave(filename = "products/yield_dist_w.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #===============================================================================
-# soc REFERENCE (timestep 0)
+# soc REFERENCE (timestep 0) and TARGET
 #===============================================================================
 
 p1 <- visualize(raster = r.fin,
                 layer = 'soc_ref',
-                name = "Ref value",
+                name = "Ref. (%)",
                 breaks = c(0,0.5,1,1.5,3,5,10,20,30,50),
                 labels = c('< 0.5','0.5 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 30','30 - 50'),
-                ftitle = 'SOC (%)')
-ggsave(filename = "products/soc_ref.png",
+                ftitle = 'Current SOC')
+ggsave(filename = "products/soc_ref2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'soc_target',
+                name = "Targ. (%)",
+                breaks = c(0,1,1.1,1.2,1.3,1.4,1.5),
+                labels = c('1','1 - 1.1','1.1 - 1.2','1.2 - 1.3','1.3 - 1.4','1.4 - 1.5'),
+                ftitle = 'Target SOC')
+ggsave(filename = "products/soc_targ2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize(raster = r.fin,
+                layer = 'dist_C',
+                name = "Ratio (ref./targ.)",
+                breaks = c(0,0.25,0.5,0.75,1,1.5,3,5,10,20,50),
+                labels = c('< 0.25','0.25 - 0.5','0.5 - 0.75','0.75 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 40'),
+                ftitle = 'Distance to target SOC')
+ggsave(filename = "products/soc_dist.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #===============================================================================
@@ -271,121 +358,32 @@ ggsave(filename = "products/soc_ref.png",
 #===============================================================================
 
 p1 <- visualize(raster = r.fin,
-                layer = 'n_sp_ref',
-                name = "Ref value",
-                breaks = c(-300,25,50,75,100,150,300),
-                labels = c('< 25','25 - 50','50 - 75','75 - 100','100 - 150','150 - 200'),
-                ftitle = 'N surplus (kg ha-1)')
-ggsave(filename = "products/n_sp_ref.png",
+                layer = 'n_sp_ref_w',
+                name = "Ref. (kg ha-1)",
+                breaks = c(-300,10,20,30,40,50,75,100,150,600),
+                labels = c('< 10','10 - 20','20 - 30','30 - 40','40 - 50','50 - 75','75 - 100','100 - 150','> 150'),
+                ftitle = 'Current N surplus')
+ggsave(filename = "products/n_sp_REF3.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
-#===============================================================================
-# yield DISTANCE (INITIAL TIMESTEP 0)
-#===============================================================================
-
 p1 <- visualize(raster = r.fin,
-                layer = 'diff_Y',
-                name = "Ref/Target",
-                breaks = c(0,1,1.25,1.5,1.75,2,2.5,3,4),
-                labels = c('< 1','1 - 1.25','1.25 - 1.5','1.5 - 1.75','1.75 - 2','2 - 2.5','2.5 - 3','3 - 4'),
-                ftitle = 'Yield distance to target (ratio)')
-ggsave(filename = "products/diff_Y_ref_w.png",
+                layer = 'n_sp_crit_w',
+                name = "Ref. (kg ha-1)",
+                breaks = c(-300,10,20,30,40,50,75,100,150,600),
+                labels = c('< 10','10 - 20','20 - 30','30 - 40','40 - 50','50 - 75','75 - 100','100 - 150','> 150'),
+                ftitle = 'Critical N surplus')
+ggsave(filename = "products/n_sp_crit2.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
-#===============================================================================
-# yield TARGET (timestep 0)
-#===============================================================================
-
 p1 <- visualize(raster = r.fin,
-                layer = 'yield_targ_w',
-                name = "Target value",
-                breaks = c(0,2500,5000,7500,10000,12500,15000,17500,20000,22500,25000,27500,30000,32500,35000,37500,55000),
-                labels = c('<2500','2500-5000','5000-7500','7500-10000','10000-12500','12500-15000','15000-17500','17500-20000','20000-22500',
-                           '22500-25000','25000-27500','27500-30000','30000-32500','32500-35000','35000-37500','37500-50000'),
-                ftitle = 'Target yield (kg ha-1)')
-ggsave(filename = "products/targ_Y.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-#===============================================================================
-# soc TARGET (INITIAL TIMESTEP 0)
-#===============================================================================
-
-p1 <- visualize(raster = r.fin,
-                layer = 'soc_target',
-                name = "Target value",
-                breaks = c(0,1,1.1,1.2,1.3,1.4,1.5),
-                labels = c('1','1 - 1.1','1.1 - 1.2','1.2 - 1.3','1.3 - 1.4','1.4 - 1.5'),
-                ftitle = 'Target SOC (%)')
-ggsave(filename = "products/targ_C.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-#===============================================================================
-# Nsu TARGET (timestep 0)
-#===============================================================================
-
-p1 <- visualize(raster = r.fin,
-                layer = 'n_sp_crit',
-                name = "Critical limit",
-                breaks = c(0,25,50,75,100,150,10000),
-                labels = c('< 25','25 - 50','50 - 75','75 - 100','100 - 150','> 150'),
-                ftitle = 'Critical N surplus (kg ha-1)')
-ggsave(filename = "products/targ_N.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-#===============================================================================
-# soc DISTANCE (INITIAL TIMESTEP 0)
-#===============================================================================
-
-p1 <- visualize(raster = r.fin,
-                layer = 'dist_C.x',
-                name = "Ref/Target",
-                breaks = c(0,0.5,1,1.5,3,5,10,20,30,40),
-                labels = c('< 0.5','0.5 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 30','30 - 40'),
-                ftitle = 'SOC distance to target (ratio)')
-ggsave(filename = "products/dist_C_ref.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-
-#===============================================================================
-# Nsu distance (INITIAL TIMESTEP 0)
-#===============================================================================
-
-p1 <- visualize(raster = r.fin,
-                layer = 'dist_N.x',
-                name = "Ref/Target",
-                breaks = c(-2,0.5,1,2.5,5,10,25),
+                layer = 'dist_N.y',
+                name = "Ratio (ref./targ.)",
+                breaks = c(-10,0.5,1,2.5,5,10,30),
                 labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 25'),
-                ftitle = 'N surplus distance to target (ratio)')
-ggsave(filename = "products/dist_N_ref.png",
+                ftitle = 'Distance to target N surplus')
+ggsave(filename = "products/n_sp_dist.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
-
-
-#===============================================================================
-# soc distance (FINAL TIMESTEP 5 YEARS)
-#===============================================================================
-
-p1 <- visualize(raster = r.fin,
-                layer = 'dist_C',
-                name = "Ref/Target",
-                breaks = c(0,0.5,1,1.5,3,5,10,20,30,40),
-                labels = c('< 0.5','0.5 - 1','1 - 1.5','1.5 - 3','3 - 5','5 - 10','10 - 20','20 - 30','30 - 40'),
-                ftitle = 'SOC distance to target (ratio)')
-ggsave(filename = "products/dist_SOC.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-#===============================================================================
-# Nsu distance (FINAL TIMESTEP 5 YEARS)
-#===============================================================================
-
-p1 <- visualize(raster = r.fin,
-                layer = 'dist_N',
-                name = "Ref/Target",
-                breaks = c(-2,0.5,1,2.5,5,10,25),
-                labels = c('< 0.5','0.5 - 1','1 - 2.5','2.5 - 5','5 - 10','10 - 25'),
-                ftitle = 'N surplus distance to target (ratio)')
-ggsave(filename = "products/dist_N.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #===============================================================================
 # SCORE_SINGLE
