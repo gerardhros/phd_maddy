@@ -200,7 +200,7 @@
     # so correct for grazing (see e.g. Eurostat); a relative fraction of total applied
 
     # what is the total effective N input on arable land (available manure and mineral on all NON-grass crops)
-    # assume only 60% of manure N available may be applied on grassland and for other crops 0
+    # assume only 60% of manure N available may be applied
     d4[, neff := fifelse(!grepl('grassland|Gras',crop_name),n_man * 0.6 + n_fert,0)]
 
     # add the extra manure from grassland to all cropland relative to the total N effective dose
@@ -218,8 +218,12 @@
     # multiply slurry and manaure parts by
     # CN ratios, humification coefficient of 0.7 (fraction convered to humus), and fraction Norg
     # kg C / ha
-    d4[, c_man_ncu := 0.5 * n_man_ncu * 12 * 0.7 * (2.1/4.0) +
-                      0.5 * n_man_ncu * 17 * 0.7 * (6.6/7.7)]
+    d4[, c_man_ncu := 0.5 * n_man_ncu * 12 * 0.7 * (2.1/4.0) + #slurry: average composition of  manure (dairy cows) - 4kg/ton N and 2.1/4 is organic fraction
+                      0.5 * n_man_ncu * 17 * 0.7 * (6.6/7.7)]  #solid manure
+    #n_man is TOTAL (including mineral and organic)
+    #humification fraction; 0.3 lost as CO2
+    #% carbon increase due to manure input and compositions
+
 
     # area for combination of fertilizer vs inorganic fertilizers
 

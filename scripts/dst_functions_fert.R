@@ -36,14 +36,13 @@
 
 
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-# db = d1
-# dt.m = dt.m
-# output = 'best_impact'
-# uw = c(1,1,1)
-# simyear = 5
-# quiet = FALSE
-# nmax=2
-
+db = d1
+dt.m = dt.m
+output = 'best_impact'
+uw = c(1,1,1)
+simyear = 5
+quiet = FALSE
+nmax=2
 
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
@@ -89,14 +88,14 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # simyear is only relevant for SOC where results are cumulative
   # converts from percentage change (from the ML models) to multiplied factor for yield, SOC and N surplus
 
-  # d3[, dY := mmean_Y * 0.01]
-  # d3[, dSOC := simyear * mmean_SOC * 0.01]
-  # d3[, dNsu := mmean_Nsu * 0.01]
-
-  #adapted Y accumulations - 1
-  d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
+  d3[, dY := mmean_Y * 0.01]
   d3[, dSOC := simyear * mmean_SOC * 0.01]
   d3[, dNsu := mmean_Nsu * 0.01]
+
+  #adapted Y accumulations - 1
+  # d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
+  # d3[, dSOC := simyear * mmean_SOC * 0.01]
+  # d3[, dNsu := mmean_Nsu * 0.01]
 
   #adapted Y and N accumulations - 2
   # d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
@@ -135,6 +134,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
   # d3[, sNsu := pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1)]
 
+  # ***************************************************
+  # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
+  # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
+  # d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
   # adding some weight to the scores even when targets met
   d3[, sY := pmax(0.1,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
   d3[, sSOC := pmax(0.1,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
@@ -149,6 +152,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
 
   # HERE NSU
+  # here the "factor" is adapted per area. E.g. 50% change in C expected for half the NCU area = 25% change mapped over the whole area
 
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
   # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
@@ -188,6 +192,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   meas.combi[,value2 := nfc[as.factor(value)]]
 
   # sum the total values of the measures (so that each measure combination has an unique code)
+  # cid unique code for each combination
   meas.combi[,value3 := sum(value2),by=cid]
 
   # add an unique ID for each unique measure combination
@@ -197,9 +202,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   meas.combi <- unique(meas.combi,by = 'cgid')
 
   # update the unique ID per measurement combi
+  # gives unique combo of measures that are possible
   meas.combi[,cgid := .GRP,by=.(value3)]
 
-  # select only the relvant columns
+  # select only the relevant columns
   meas.combi <- meas.combi[,.(cgid,man_code = value)]
 
   # make an unique table with each combination of measures per unique ID
@@ -236,29 +242,46 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     ncu_min <- ncu_steps[i-1]
     ncu_max <- ncu_steps[i]
 
+    ncu_min = 1
+    ncu_max = 100
     # subset the dataset
     dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
 
-    # add random noise to avoid same rank for measures with similar impacts
 
-    # introduces 2-3% variation around value
+
+
     cols <- c('sY','sSOC','sNsu','dY','dSOC','dNsu')
 
+    # when score 0 replace value with very low number
+    # so that output is not zero from all the multiplying
     dt.ss[sY == 0, sY := 1e-4]
     dt.ss[sNsu == 0, sNsu := 1e-4]
     dt.ss[sSOC == 0, sSOC := 1e-4]
     set.seed(123)
+
+    # add random noise to avoid same rank for measures with similar impacts
+    # introduces 2-3% variation around value
+    # s= distance to target; d = amount of change (added on)
+    #adding noise
+    #set normal dist with mean 0 and SD .01
+    # x is cols wehre we apply function
+    # .N is all the rows; this gives us hist varying from 0.98 to 1.02 hist(1+rnorm(1000,0,0.01))
+    #sometimes all the management practices have essentially same score and need to choose "best" with some variation added
     dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
     # HERE NEGATIVE VALUES (Nsu) GET REPLACED WITH VERY SMALL NUMBERS
     # removed pmax(x,1e-3)
 
     # add a relative score for the impact of each measure, sorted on their impact on the indicator (highest impact = lowest rank)
+    # rank 1 to x by ncu and cgid (all measure combo)
+    # sum up 3 cols which are rank of absolute measure; this shows order of magnitude for each impact Y/C/N
+    # "identical impacts" get the same score
     dt.ss[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by=.(ncu,cgid)]
 
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
     # add order per NCU and per measure combination (cgid), so that most impactful measure has rank 1
+    # exact same as odY, BUT it does not use absolute value but also includes the negative impacts
     dt.ss[, c('fY','fSOC','fNsu') := lapply(.SD,function(x) frankv(x,order=-1)),.SDcols = c('sY','sSOC','sNsu'),by=.(ncu,cgid)]
 
     # update progress bar
@@ -267,32 +290,43 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # combined measures not additive
     # highest score counts 100, second 50, third 33, etc
     # estimate the change in indicators due to the measures taken, and estimate the change in the integral score for three indicators together
+    # bipmc = weighted avg impact of the 3 indicators of the combo of measures applied
+    # divide dist to target by the rank; biggest change in direction of target counts for 100/50/etc.; fNsu keeps negative impacts and
+    # calculates correct direction of magnitude
+    # change in target to yield + change in target SOC + change N
+    # each "change" is altered by user weight (the score is literally multiplied by 2 for that weight, etc.)
+    # dividing by sum uw gives us relative impact of the 3
+    # e.g 1, 1, 8 = multiplied score by 1/10, 1/10, 8/10
+    # define these first 3 rows in equations in paper
+    # explain the s values definition (0 to 1)
     dt.ss2 <- dt.ss[, list(bipmc = (sum(uw[1] * sY/fY,na.rm = T) +
                                       sum(uw[2] * sSOC/fSOC,na.rm = T) +
                                       sum(uw[3] * sNsu / fNsu,na.rm=T)) / sum(uw),
                            dY = sum(dY/odY),                 #sum is there only for combined measures because must sum up each
-                           dSOC = sum(dSOC/odSOC),
-                           dNsu = sum(dNsu/oNsu),
+                           dSOC = sum(dSOC/odSOC), # divide col dY by oDY and then sum them across combined measures (dividing by a score of 1/2/3 gives 100/50/33 effect)
+                           dNsu = sum(dNsu/oNsu), # here we also want average change in yield, etc. summed per indicator for all combos per ncu - multiplying by "d" gives us right direction and summing up impacts based on ordered score O
                            dist_Y=dist_Y[1],
                            dist_C=dist_C[1],
                            dist_N=dist_N[1]),
-                    by=.(ncu,cgid)]
+                    by=.(ncu,cgid)] # each measure combo gets unique weighted impact sum; we have a bipmc value for each unique combo (cgid)
 
+    #up to here we have all measures
 
 
     # add a ranking based on the integral score for each ncu
     # also for all combinations
+    # bipmc is the WEIGHTED AVERAGE CHANGE total and now rank based on this value (e.g. 1 through x measures)
     dt.ss2[,bipmcs := as.integer(frankv(bipmc)),by=ncu]
 
-    # add the measures taken
+    # add the names of measures taken back in from cgid (saves some memory)
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
-
-
 
     # save into a list
     dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs)])
 
   }
+
+# for loop goes through NCUs in subsets to save memory; can define min/max when running separate
 
   # converts the list into a table (rowbind)
   dt.out <- rbindlist(dt.out)
@@ -359,8 +393,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     #SELECT NO. OF MEASURES 2; SELECT COLUMNS; OVERWRITE COLUMN BIPMCS (ORDER OF ALL COMBO MEASURES)
     #SO MAKING A SUBSET OF THIS BASED ON A CRITERIA; THEN RECALCULATE THE ORDER BASED ON "MISSING RANK VALUES"
     pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    pout4 = pout4[bipmcs==1]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
+    # pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
 
     # pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # pout4 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
@@ -372,8 +407,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('score_trio|all',output))>0 & nmax >= 3){
 
     pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
-    # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-    pout5 <- dcast(pout5,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
+    pout5 = pout5[bipmcs==1]
+
+     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
+    # pout5 <- dcast(pout5,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
   } else {pout5 = NULL}
 
   # THIS IS SAME AS POUT2 BUT FOR BEST COMBO

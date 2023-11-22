@@ -39,8 +39,8 @@ floc <- 'C:/dst_outputs/'
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
 d1 <- fread(paste0(floc,'db_final_europe_y2.csv'))
-d2 <- fread(paste0(floc,'db_final_europe_y2.csv'))
-
+d2 <- fread(paste0(floc,'db_final_europe_y.csv'))
+# setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref'))
 
 # load the global AND covariate meta-models when available
 ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0-1_OF-Nsu.xlsx')
@@ -156,8 +156,8 @@ dt.meas <- as.data.table(merge(dt.meas,d2.nRT,by='ncu'))
 
 #default
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'all',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
 
 #user weights yield
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(2,1,1),simyear = 5,quiet = FALSE,nmax=1)
@@ -190,6 +190,11 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),sim
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 # IMPACT_BEST -----------------------------------------------------------------
+
+# load functions for aggregation and optimisation DST
+source('scripts/dst_functions_fert.r')
+
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 # save 1 best measure
 out.best <- sim.all$impact_best
@@ -228,8 +233,6 @@ out.best <- sim.all$impact_best
 # FIGURES FOR one MEASURE OVER ALL EU-27------------------------------------
 
   out.total <- sim.all$impact_total
-
-
 
 
   dt.meas <- as.data.table(merge(dt.meas,out.total,by='ncu'))
@@ -345,6 +348,8 @@ out.best <- sim.all$impact_best
 
 # SCORE_SINGLE ----------------------------------------------------------------
 
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+
 # ranking of each measure - map - check second ranked measure after EE
 out.single <- sim.all$score_single
 out.single$concat <- paste(out.single$`1`,out.single$`2`,out.single$`3`,
@@ -354,6 +359,8 @@ out.single$concat <- paste(out.single$`1`,out.single$`2`,out.single$`3`,
   rank.single <- data.frame(table(out.single$concat))
   fwrite(rank.single,paste0(floc,'rank.single.csv'))
   colnames(rank.single) <- c('concat', 'freq')
+
+
 
   #select columns to summarize continuous variables
   out.single.stat <- out.single[,.(ncu,concat,dist_Y,dist_C,dist_N)]
@@ -388,17 +395,29 @@ sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),sim
   out.duo <- sim.all.2$score_duo
   out.duo2 <- sim.all.2$impact_total
   #frequency of best measures - make table for single rankings
-  rank.duo <- data.frame(table(out.duo$`1`))
+  rank.duo <- data.frame(table(out.duo$man_code))
   fwrite(rank.duo,paste0(floc,'rank.duo.csv'))
   colnames(rank.duo) <- c('concat', 'freq')
 
-  #select columns to summarize continuous variables
-  out.duo.stat <- out.duo[,.(ncu,`1`,dist_Y,dist_C,dist_N)]
-  #summary over input/output parameters
-  #merge with continuous site factors and save
-  fact.cont.duo <- merge(d1.fact.cont,out.duo.stat,by='ncu')
+  table(out.duo$man_code)
 
-  fact.duo <- aggregate(.~`1`,data=fact.cont.duo,mean)
+  Y_initial <- sum(out.best$ti_Y)/29476
+  Y_final <- sum(out.duo$tm_Y)/29476
+
+  C_initial <- sum(out.best$ti_C)/29476
+  C_final <- sum(out.duo$tm_C)/29476
+
+  N_initial <- sum(out.best$ti_N)/29476
+  N_final <- sum(out.duo$tm_N)/29476
+
+
+  # #select columns to summarize continuous variables
+  # out.duo.stat <- out.duo[,.(ncu,`1`,dist_Y,dist_C,dist_N)]
+  # #summary over input/output parameters
+  # #merge with continuous site factors and save
+  # fact.cont.duo <- merge(d1.fact.cont,out.duo.stat,by='ncu')
+
+  fact.duo <- aggregate(.~man_code,data=out.duo,mean)
   fwrite(fact.duo,paste0(floc,'fact.duo.csv'))
 
   #-----------------------------------------------------------------------------
@@ -485,6 +504,31 @@ sim.all.2 <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),sim
 # DST simulation for THREE combined measures applied at once
 #=====================================================================================
 sim.all.3 <- runDST(db = d1, dt.m = dt.m, output = 'score_trio',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
+
+  # best pair of TWO measures
+  out.trio <- sim.all.3$score_trio
+  #out.trio2 <- sim.all.3$impact_total
+
+  #frequency of best measures - make table for single rankings
+  rank.trio <- data.frame(table(out.trio$man_code))
+  fwrite(rank.trio,paste0(floc,'rank.trio.csv'))
+  colnames(rank.trio) <- c('concat', 'freq')
+
+  table(out.trio$man_code)
+
+  Y_initial <- sum(out.best$ti_Y)/29476
+  Y_final <- sum(out.trio$tm_Y)/29476
+
+  C_initial <- sum(out.best$ti_C)/29476
+  C_final <- sum(out.trio$tm_C)/29476
+
+  N_initial <- sum(out.best$ti_N)/29476
+  N_final <- sum(out.trio$tm_N)/29476
+
+
+
+
+
   # best pair of THREE measures
   out.trio <- sim.all.3$score_trio
   #frequency of best measures - make table for single rankings
