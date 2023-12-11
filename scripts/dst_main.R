@@ -25,6 +25,14 @@
   # read in the earlier saved database from integrator
   d1 <- fread(paste0(floc,'db_final_europe.csv'))
 
+  # add area for EE, RFT, RFP and RFR to the database
+  d1[,nup := n_fert+n_man + n_fix + n_dep - n_sp_ref]
+  d1[,nue := nup/(n_fert+n_man + n_fix + n_dep)]
+  d1[,parea.rft := pmin(1,pmax(0,1-nue)) * area_ncu_ha]
+  d1[,parea.ee := pmin(1,1-yield_target / yield_ref) * area_ncu_ha]
+  d1[,parea.rft := pmin(1,1-yield_target / yield_ref) * area_ncu_ha]
+  d1[,parea.rfp := pmin(1,1-yield_target / yield_ref) * area_ncu_ha]
+
   # load the default meta-analytical models AND covariate models
   # creates a list of objects --grand mean man (7) - grand SD-cov means (58) - cov SDs--
   ma_models <- lmam(fname = 'data/MA models template AGEE.xlsx')
