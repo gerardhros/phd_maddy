@@ -19,7 +19,7 @@
 
   # location of data objects not stored on github
   floc <- 'C:/dst_outputs/'
-
+  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
 # load database to link NCU to NUTS levels
 

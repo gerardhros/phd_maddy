@@ -31,6 +31,7 @@ source('scripts/dst_functions_fert.r')
 
 # location of data objects not stored on github
 floc <- 'C:/dst_outputs/'
+floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
 #===============================================================================
 # connect databases, meta-models, site factors
@@ -38,25 +39,39 @@ floc <- 'C:/dst_outputs/'
 
 # read in the earlier saved database from integrator
 # replace in dst_outputs with smaller BE dataset for testing
+<<<<<<< HEAD
 d1 <- fread(paste0(floc,'db_final_europe_y2.csv'))
 d2 <- fread(paste0(floc,'db_final_europe_y.csv'))
 # setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref'))
+=======
+d1 <- fread(paste0(floc,'db_final_europe.csv'))
+d1 <- d1[ncu<1000]
+setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref'))
+
+#d1 <- fread(paste0(floc,'db_final_europe_y2.csv'))
+#d2 <- fread(paste0(floc,'db_final_europe_y2.csv'))
+>>>>>>> 4b2de830595cff818eaf3e359f6d23e71b5119d2
 
 # load the global AND covariate meta-models when available
-ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_meas_0-1_OF-Nsu.xlsx')
+ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_till_crop_meas.xlsx')
 
 # join MA impact models for fertiliser measures
-dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models)
-dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models)
-dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models)
-dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models)
+dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models, covar = FALSE)
+dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models, covar = FALSE)
+dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models, covar = FALSE)
+dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models, covar = FALSE)
 dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = TRUE)
 dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
+dt.m7 <- cIMAm(management='CC',db = d1, mam = ma_models, covar = TRUE)
+dt.m8 <- cIMAm(management='NT-CT',db = d1, mam = ma_models,covar = TRUE)
+dt.m9 <- cIMAm(management='RES',db = d1, mam = ma_models, covar = TRUE)
+dt.m10 <- cIMAm(management='ROT',db = d1, mam = ma_models, covar = TRUE)
+dt.m11 <- cIMAm(management='RT-CT',db = d1, mam = ma_models, covar = TRUE)
 
 # combine all measures and their impacts into one data.table
-dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
+dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 
-rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6)
+rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 
 # save meta-models in table
 ma.models <- data.frame(ma_models$ma_mean,ma_models$ma_sd)

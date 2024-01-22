@@ -231,7 +231,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # make a sequence to split the database
   # YOU CAN ADAPT INTO LARGER LENGTH.OUT IF NEEDED FOR COMPUTER MEMORY
   # CHANGE "0" TO MIN(DT$NCU) TO TEST FOR LOOP BELOW
-  ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 600)))
+  ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 60)))
 
   # predefine i=1, or 2 etc. then can run line by line
   # impacts calculated in subsets to enhance speed and avoid huge RAM usage
@@ -395,7 +395,17 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
     pout4 = pout4[bipmcs==1]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
+<<<<<<< HEAD
     # pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
+=======
+    pout4a <- dcast(pout4,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
+
+    pout4[,tm_all := tm_Y + tm_C + tm_N]
+    pout4b <- dcast(pout4,ncu~man_code,value.var = 'tm_all')
+
+    pout4 = pout4[bipmcs==1]
+    pout4[,]
+>>>>>>> 4b2de830595cff818eaf3e359f6d23e71b5119d2
 
     # pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # pout4 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
@@ -587,26 +597,47 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
   # ADAPTED FROM MAIN CODE TO MATCH TOTAL NCU AREA TO THE PRACTICE (WE DO NOT NEED BASELINE MANAGEMENT /CROP AREAS)
   #STILL NEED EFFECT OF FERTILIZER VERSUS NO FERTILIZER SO THIS MIGHT AFFECT THE CODE
 
+  # add nitrogen use calculations to update the potential applicable measures for fertilizers
+  # add area for EE, RFT, RFP and RFR to the database
+  db[,nup := n_fert+n_man + n_fix + n_dep - n_sp_ref]
+  db[,nue := nup/(n_fert+n_man + n_fix + n_dep)]
+  db[,parea.rfr := pmin(1,pmax(0,1-nue)) * area_ncu_ha]
+  db[,parea.ee := pmin(1,yield_target / yield_ref - 1) * area_ncu_ha]
+  db[,parea.rft := pmin(1,yield_target / yield_ref - 1) * area_ncu_ha]
+  db[,parea.rfp := pmin(1,yield_target / yield_ref - 1) * area_ncu_ha]
+
   # select the right column for the area
-  # one of the following 7 measures is selected when running the function
-  if(management=='EE'){
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)] # add total ncu area from integrator
+  # one of the following 11 measures is selected when running the function
+  if(management=='CC'){
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.cc)] # just selecting area from integrator
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.cc)] # separate selection adding covariate property
+  } else if(management=='RES'){
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.cres)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.cres)]
+  } else if(management=='ROT'){
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.cr)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.cr)]
+  } else if(management=='NT-CT'){
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.ntct)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.ntct)]
+  } else if(management=='RT-CT'){
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.rtct)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.rtct)]
+  } else if(management=='EE'){
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.ee)] # add total ncu area from integrator
     dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)] # separate selection adding covariate property
   } else if(management=='RFP'){
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)]
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.rfp)]
     dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
   } else if(management=='RFR'){
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)]
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.rfr)]
     dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
   } else if(management=='RFT'){
-    dt.m1 <- db[,.(ncu,ha_m1 = area_ncu_ha)]
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.rft)]
     dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = area_ncu_ha)]
   } else if(management %in% c('OF-NF','CF-NF','MF-NF')){
-    #dt.m1 <- db[,.(ncu,ha_m1 = parea.nifnof)]
-    #dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.nifnof)]
-    stop('this management measure was not yet available in MA models. Please, update the function by adding which area the measure can be applied')
-    #might add these later if available
-
+    dt.m1 <- db[,.(ncu,ha_m1 = parea.nifnof)]
+    dt.cov.m1 <- db[,.(ncu,cov_soil,cov_clim,cov_crop,cov_fert,cov_soc, ha_m1 = parea.nifnof)]
   } else if(management=='CF-MF'){
     # impact of partly replacing mineral fertilizers by organic ones
     # since impact is lower on highly fertilized soils, I halve the area (being identical to half the impact)
@@ -631,8 +662,8 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
   # join the integrator database with the main meta-analytical models
   # adds MA models to the ncu areas
   dt.m1 <- dt.m1[,.(ha_m1 = sum(ha_m1),man_code=management),by=ncu] #selecting area and adding man code
-  dt.m1 <- merge(dt.m1,ma_mean[man_code==management],by='man_code') #merging mean estimate
-  dt.m1 <- merge(dt.m1,ma_sd[man_code==management],by='man_code') #again for SD
+  dt.m1 <- merge(dt.m1,ma_mean[man_code==management],by='man_code',all.x = TRUE) #merging mean estimate
+  dt.m1 <- merge(dt.m1,ma_sd[man_code==management],by='man_code',all.x = TRUE) #again for SD
 
   #extract names for indicators (N, C, Y), by removing mean/sd text - selects those present in your db
   cols <- unique(gsub('^mean_','',colnames(dt.m1)[grepl('^mean',colnames(dt.m1))]))
@@ -670,13 +701,10 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
     dt.cov.m1[,man_code := management] #input management code you selected
     dt.cov.m1 <- melt(dt.cov.m1,id.vars = c('ncu','ha_m1','man_code','unid'),value.name = 'group') #make columns to rows
     dt.cov.m1[,variable := NULL] #removed column for covariable name to save memory because codes for each group is unique to variable
-
-    #HERE THERE ARE PROBLEMS WITH V.fert BECAUSE THERE ARE ONLY COVAR MEANS FOR JUST OF AND CF
-
-    dt.cov.m1 <- merge(dt.cov.m1,ma_cov_mean[man_code==management],by=c('group','man_code'))
+    dt.cov.m1 <- merge(dt.cov.m1,ma_cov_mean[man_code==management],by=c('group','man_code'),all.x = TRUE)
     #long list of models and filter the management code and join based on right groups (e.g. CC and cov_crop )
     dt.cov.m1 <- unique(dt.cov.m1)[,mods:=NULL] #remove some duplicated NCUs
-    dt.cov.m1 <- merge(dt.cov.m1,ma_cov_sd[man_code==management],by=c('group','man_code'))
+    dt.cov.m1 <- merge(dt.cov.m1,ma_cov_sd[man_code==management],by=c('group','man_code'),all.x = TRUE)
     #same long list operation for SD
     dt.cov.m1 <- unique(dt.cov.m1)
 
@@ -687,8 +715,8 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
     #not sure why a weighted mean used? is it for different areas of crops in each NCU?
     #considering coarse groups of meta-models, there are different types of each group in the list per NCU
     dt.cov.m1 <- dt.cov.m1[,lapply(.SD,function(x) weighted.mean(x,w=ha_m1,na.rm=T)),.SDcols = c(cols),by=c('ncu','man_code')]
-    # if area missing then set to zero change
-    dt.cov.m1[,c(cols):= lapply(.SD,function(x) fifelse(is.na(x),0,x)),.SDcols = cols] #GERARD CHECKS THIS LINE (SEE BELOW)
+    # if area missing then set to zero change, and add some noise to replace the NA (being zero now) later
+    dt.cov.m1[,c(cols):= lapply(.SD,function(x) fifelse(is.na(x),0,x+0.00001)),.SDcols = cols] #GERARD CHECKS THIS LINE (SEE BELOW)
     #reshaping columns to rows
     cols <- unique(gsub('^mean_|^sd_','',colnames(dt.cov.m1)[grepl('^mean|^sd',colnames(dt.cov.m1))]))
     dt.cov.m1 <- melt(dt.cov.m1,id.vars = c('ncu','man_code'),
@@ -710,7 +738,7 @@ cIMAm <- function(management,db = d1, mam = ma_models,montecarlo = FALSE, covar 
     # merge the models with and without covariates and select covariates when available
     # we select the available covar model over the global model; when covar missing take global one
     # covar model at this point is average of the site properties applicable for that NCU
-    dt.m1.fin <- merge(dt.m1,dt.cov.m1,by=c('ncu','indicator'))
+    dt.m1.fin <- merge(dt.m1,dt.cov.m1,by=c('ncu','indicator'),all.x=TRUE)
     dt.m1.fin[,mmean := fifelse(cov_mean==0,mean,cov_mean)] #IF COVARIATE MODEL IS NA THEN TAKE GLOBAL; BUT ABOVE CHANGED NAs to 0
     dt.m1.fin[,msd := fifelse(cov_mean==0,sd,cov_sd)] #MADDY NOW CHANGED IT TO REPLACE ZERO WITH GLOBAL MODELS
     dt.m1.fin <- dt.m1.fin[,.(ncu,ha_m1,indicator,man_code,mmean,msd)] #define final output = #NCUs * #indicators = 88000
