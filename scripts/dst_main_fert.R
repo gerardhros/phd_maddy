@@ -1,18 +1,20 @@
-#CONTROLLING FUNCTIONS AND EVEENTUALLY CAN JUST USE THIS FOR FINAL RUNNING
 
 # #################################################################################################
-# #   MAIN CODE TO RUN SIMULATIONS
+#    April 2024 - main code to run simulations for DST MANAGEMENT-IMPACT ACROSS EUROPE
 # #################################################################################################
 
+# first ensure input file is in dst_outputs
 
 # dst_loaddb = loads/combines Integrator/Eurostat external databases and likelihoods
-#            = only use if db_final_europe needs to be generated
+#            = only use when db_final_europe needs to be generated
+#            = sourced by prepare_input
 
-# dst_prepare_input = applies downscaling to make db_final_europe
-#                   = only use if db_final_europe needs to be generated
-#                   = update the dst_outputs folder with correct version (subset BE or all EU)
+# dst_prepare_input_fert = applies downscaling to make db_final_europe
+#                        = only use if db_final_europe needs to be generated
+#                        = update the dst_outputs folder with correct version (subset BE or all EU)
+#                        = "fert" is most recent version updated from IFS paper onward
 
-# dst_functions = used by all scripts
+# dst_functions_fert = used by all scripts for calculations
 
 #================================================
 # set data sources
@@ -31,31 +33,25 @@ source('scripts/dst_functions_fert.r')
 
 # location of data objects not stored on github
 floc <- 'C:/dst_outputs/'
-floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+#floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
 #===============================================================================
-# connect databases, meta-models, site factors
+# connect integrator/eurostat database with meta-models and site factors
 #===============================================================================
 
 # read in the earlier saved database from integrator
-# replace in dst_outputs with smaller BE dataset for testing
-<<<<<<< HEAD
-d1 <- fread(paste0(floc,'db_final_europe_y2.csv'))
-d2 <- fread(paste0(floc,'db_final_europe_y.csv'))
-# setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref'))
-=======
 d1 <- fread(paste0(floc,'db_final_europe.csv'))
-d1 <- d1[ncu<1000]
-setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref'))
+# replace d1 with a smaller subset of the dataset for faster testing (BE only / 1000 ncus)
+# d1 <- d1[ncu<1000]
 
-#d1 <- fread(paste0(floc,'db_final_europe_y2.csv'))
-#d2 <- fread(paste0(floc,'db_final_europe_y2.csv'))
->>>>>>> 4b2de830595cff818eaf3e359f6d23e71b5119d2
+# reverse the names for reference and target yield because they were switched in NCU dataset
+setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref')) #???
 
 # load the global AND covariate meta-models when available
-ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_till_crop_meas.xlsx')
+ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_till_crop_meas.xlsx')
+#ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_till_crop_meas.xlsx')
 
-# join MA impact models for fertiliser measures
+# join MA impact models for all measures (fertilizer + tillage + cropping)
 dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models, covar = FALSE)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models, covar = FALSE)
 dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models, covar = FALSE)
@@ -69,11 +65,11 @@ dt.m10 <- cIMAm(management='ROT',db = d1, mam = ma_models, covar = TRUE)
 dt.m11 <- cIMAm(management='RT-CT',db = d1, mam = ma_models, covar = TRUE)
 
 # combine all measures and their impacts into one data.table
+# [ ncu / areas / indicator name / management name / mean impact / sd impact ]
 dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
-
 rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 
-# save meta-models in table
+# save meta-model tables in csv in outputs
 ma.models <- data.frame(ma_models$ma_mean,ma_models$ma_sd)
 fwrite(ma.models,paste0(floc,'ma.models.csv'))
 ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
@@ -83,30 +79,44 @@ fwrite(ma.cov.models,paste0(floc,'ma.cov.models.csv'))
 #=====================================================================================
 # create data table to summarize factors (separate from simulation input)
 #=====================================================================================
-#
-#--------------DATA FOR FACTORS AND TARGETS MET------------------------------------------
 
-d1.fact <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
+#--------------FACTORS AND TARGETS MET------------------------------------------
+
+d1.fact <- data.table(cbind(d1$ncu, d1$area_ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
                              d1$yield_ref, d1$soc_ref, d1$n_sp_ref,
                              d1$yield_target, d1$soc_target,d1$n_sp_sw_crit, d1$n_sp_gw_crit))
-colnames(d1.fact) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
+colnames(d1.fact) <- c('ncu', 'area_ncu','texture', 'density', 'cn', 'clay', 'ph',
                          'yield_ref', 'soc_ref', 'n_sp_ref','yield_target', 'soc_target','n_sp_sw_crit', 'n_sp_gw_crit')
 
-#add INITIAL distance to targets index
-d1.fact[, dist_Y := yield_ref / yield_target ]
-
-d1.fact[, dist_C := soc_ref / soc_target ]
+# renamed dist_Y C N to dist_Yi Ci Ni
+#add INITIAL distance to targets index for all ncu crop areas
+d1.fact[, dist_Yi := yield_ref / yield_target ]
+d1.fact[, dist_Ci := soc_ref / soc_target ]
 d1.fact[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999]
 d1.fact[is.na(n_sp_gw_crit), n_sp_gw_crit := 9999]
-d1.fact[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+d1.fact[, dist_Ni := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)] #take lowest limit of either surface/groundwater
 
-#remove Nsu critical columns due to missing values
-#d1.fact.sub = subset(d1.fact, select = -c(n_sp_sw_crit,n_sp_gw_crit) )
-#aggregate by ncu
-d1.fact <- aggregate(.~ncu,d1.fact,mean)
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+ #aggregate by ncu using the mean for all crop areas per factor
+ d1.fact <- aggregate(.~ncu,d1.fact,mean)
+#
+# #aggregate by weighted mean
+
+#d1.fact.t <- d1.fact[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
+cols <- colnames(d1.fact)[grepl('^texture|^density|^cn|^clay|^ph|^yield_ref|^soc_ref|^n_sp_ref|^yield_target|^soc_target|^n_sp_sw_crit|^n_sp_gw_crit',colnames(d1.fact))] #store col names
+d1.fact.t <- d1.fact[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu')]
+
+  # estimate overall impact per measure & NCU given the different area coverage based on crop types
+  # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
+# d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
+# cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
+# d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
+
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
-#----------------DATA FOR INITIAL TARGETS----------------------------------------
+#----------------INITIAL TARGETS------------------------------------------------
+
 d1.targ <- data.table(cbind(d1$ncu, d1$texture, d1$density, d1$cn, d1$clay, d1$ph,
                             d1$yield_ref, d1$soc_ref, d1$n_sp_ref,
                             d1$yield_target, d1$soc_target,d1$n_sp_sw_crit, d1$n_sp_gw_crit))
@@ -115,15 +125,22 @@ colnames(d1.targ) <- c('ncu', 'texture', 'density', 'cn', 'clay', 'ph',
 
 d1.targ <- data.table(cbind(d1$ncu, d1$soc_target, d1$n_sp_sw_crit, d1$n_sp_gw_crit))
 colnames(d1.targ) <- c('ncu', 'soc_target','n_sp_sw_crit', 'n_sp_gw_crit')
-d1.targ[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999]
+
+d1.targ[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999] # correct Nsu missing values
 d1.targ[is.na(n_sp_gw_crit), n_sp_gw_crit := 9999]
-d1.targ[,n_sp_crit:= pmin(n_sp_sw_crit,n_sp_gw_crit)]
+d1.targ[,n_sp_crit:= pmin(n_sp_sw_crit,n_sp_gw_crit)] # final Nsu = lowest of surface or groundwater
 
 d1.targ <- aggregate(.~ncu,d1.targ,mean)
 
 
 # --------------- yield reference weighted mean by crop areas ------------------
 
+# make copy of db_final_europe to calculate weighted mean separately
+d2 <- fread(paste0(floc,'db_final_europe.csv'))
+# replace d2 with a smaller subset of the dataset for faster testing (BE only / 1000 ncus)
+d2 <- d2[ncu<1000]
+
+# replace Nsu missing values with conservative estimate
 d2[is.na(n_sp_sw_crit), n_sp_sw_crit := 9999]
 d2[is.na(n_sp_gw_crit), n_sp_gw_crit := 9999]
 d2[,n_sp_crit:= pmin(n_sp_sw_crit,n_sp_gw_crit)]
@@ -139,10 +156,12 @@ Yt_wm <- ddply(d2.Yt, .(ncu), function(x) data.frame(yield_targ_w=weighted.mean(
 
 d2.yRT <- merge(Yr_wm,Yt_wm,by='ncu')
 as.data.table(d2.yRT)
-d2.yRT$dist_Y = d2.yRT$yield_ref_w / d2.yRT$yield_targ_w
-d2.yRT$dist_Yt = d2.yRT$yield_targ_w / d2.yRT$yield_ref_w
-d2.yRT$diff_Y = d2.yRT$yield_targ_w - d2.yRT$yield_ref_w
-d2.yRT$perc_Yt = (d2.yRT$yield_targ_w - d2.yRT$yield_ref_w)/d2.yRT$yield_targ_w
+
+#mainly only need dist_Yw, others are extra parameters describing distance to target
+d2.yRT$dist_Yw = d2.yRT$yield_ref_w / d2.yRT$yield_targ_w
+d2.yRT$dist_ywt = d2.yRT$yield_targ_w / d2.yRT$yield_ref_w
+d2.yRT$diff_yw = d2.yRT$yield_targ_w - d2.yRT$yield_ref_w
+d2.yRT$perc_ywt = (d2.yRT$yield_targ_w - d2.yRT$yield_ref_w)/d2.yRT$yield_targ_w
 
 
 # --------------- N surplus reference weighted mean by crop areas ------------------
@@ -156,17 +175,19 @@ Nt_wm <- ddply(d2.Nt, .(ncu), function(x) data.frame(n_sp_crit_w=weighted.mean(x
 
 d2.nRT <- merge(Nr_wm,Nt_wm,by='ncu')
 as.data.table(d2.nRT)
-d2.nRT$dist_N = d2.nRT$n_sp_ref_w / d2.nRT$n_sp_crit_w
-d2.nRT$diff_N = d2.nRT$n_sp_crit_w - d2.nRT$n_sp_ref_w
+
+#mainly only need dist_Nw, others are extra parameters describing distance to target
+d2.nRT$dist_Nw = d2.nRT$n_sp_ref_w / d2.nRT$n_sp_crit_w
+d2.nRT$diff_nw = d2.nRT$n_sp_crit_w - d2.nRT$n_sp_ref_w
 
 # figures
 #merge reference values with yield and Nsu weighted means and DSF output
-dt.meas <- as.data.table(merge(d1.fact,d2.yRT,by='ncu'))
-dt.meas <- as.data.table(merge(dt.meas,d2.nRT,by='ncu'))
+# dt.meas <- as.data.table(merge(d1.fact,d2.yRT,by='ncu'))
+# dt.meas <- as.data.table(merge(dt.meas,d2.nRT,by='ncu'))
 
 
 #=====================================================================================
-# DST simulation for best measure and ranking of measures, ONE measure applied at time
+# various DST simulation for best measure combo - diff Uw, timeframe, #measures
 #=====================================================================================
 
 #default
@@ -204,12 +225,13 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),sim
 #adapt time factor to 3/5 for yield and to 2/5 for N surplus
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
-# IMPACT_BEST -----------------------------------------------------------------
 
-# load functions for aggregation and optimisation DST
-source('scripts/dst_functions_fert.r')
+#=====================================================================================
+# DST simulation for impact_best
+#=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'total_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 # save 1 best measure
 out.best <- sim.all$impact_best
@@ -217,6 +239,7 @@ out.best <- sim.all$impact_best
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
 
+  #----------------------- % targets met based on #ncu's------------------------
   Y_initial <- sum(out.best$ti_Y)/29476
   Y_final <- sum(out.best$tm_Y)/29476
 
@@ -226,50 +249,89 @@ out.best <- sim.all$impact_best
   N_initial <- sum(out.best$ti_N)/29476
   N_final <- sum(out.best$tm_N)/29476
 
+  # calculate total area of each ncu and add it to d1
+  d1[,area_ncu_ha_tot := sum(area_ncu_ha,na.rm = TRUE), by =.(ncu)]
+  test <- data.frame(ncu=d1$ncu,area_ncu_ha_tot=d1$area_ncu_ha_tot)
+  test <- aggregate(.~ncu,data=test,mean)
 
-  dt.meas <- as.data.table(merge(dt.meas,out.best,by='ncu'))
+  #merge area_ncu_ha_tot with out.best
+  out.best <- merge(out.best,test,by='ncu')
+
+  #calculate total ncu land area
+  tot_area <- sum(out.best$area_ncu_ha_tot)
+
+  #sum area total initial yield targets met
+  out.best[,ti_Ya := fifelse(ti_Y == 1,area_ncu_ha_tot,0)]
+  ti_Ya_tot <- sum(out.best$ti_Ya)
+  Y_init_area <- ti_Ya_tot/tot_area
+
+  out.best[,ti_Ya := fifelse(ti_Y == 1,area_ncu_ha_tot,0)]
+  ti_Ya_tot <- sum(out.best$ti_Ya)
+  Y_init_area <- ti_Ya_tot/tot_area
+
+
+  #d4[parea.nifnof > 0,fert_type := 'nifnof']
+
+#use for testing smaller dataset ---------------------------------------------
+  #e.g. ncu<1000 = 598 ncus actually in the dataset / ncu<5000=2032
+  Y_initial <- sum(out.best$ti_Y)/598
+  Y_final <- sum(out.best$tm_Y)/598
+
+  C_initial <- sum(out.best$ti_C)/598
+  C_final <- sum(out.best$tm_C)/598
+
+  N_initial <- sum(out.best$ti_N)/598
+  N_final <- sum(out.best$tm_N)/598
+
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+  # merge here if dt.meas already created
+  # dt.meas <- as.data.table(merge(dt.meas,out.best,by='ncu'))
 
   #merge reference values with weighted means and DSF output
   dt.meas <- as.data.table(merge(d1.fact,Yr_wm,by='ncu'))
   dt.meas <- as.data.table(merge(dt.meas,Yt_wm,by='ncu'))
-  dt.meas <- as.data.table(merge(d1.fact,Nr_wm,by='ncu'))
+  dt.meas <- as.data.table(merge(dt.meas,Nr_wm,by='ncu'))
   dt.meas <- as.data.table(merge(dt.meas,Nt_wm,by='ncu'))
   fact.best <- as.data.table(merge(dt.meas,out.best,by='ncu'))
 
-  fact.best <- fact.best[,.(man_code.x,ncu,density,cn,clay,ph,yield_ref_w,yield_targ_w,soc_ref,
-            soc_target,n_sp_ref_w,n_sp_crit_w,dist_Y.x,dist_C.x,dist_N.x,dY.x,dSOC.x,dNsu.x,
-            ti_Y.x,ti_C.x,ti_N.x,tm_Y.x,tm_C.x,tm_N.x)]
+  # change order of columns | dist_Y,C,N = DST output area-weighted mean by crop/ncu
+  fact.best <- fact.best[,.(man_code,ncu,density,cn,clay,ph,yield_ref_w,yield_targ_w,soc_ref,
+            soc_target,n_sp_ref_w,n_sp_crit_w,dist_Y,dist_C,dist_N,dY,dSOC,dNsu,
+            ti_Y,ti_C,ti_N,tm_Y,tm_C,tm_N)]
 
-  fact.best.mean <- aggregate(.~man_code.x,data=fact.best,mean)
+  fact.best.mean <- aggregate(.~man_code,data=fact.best,mean)
 
   fwrite(fact.best.mean,paste0(floc,'fact.best.mean2.csv'))
 
 
-# FIGURES FOR one MEASURE OVER ALL EU-27------------------------------------
+################### IMPACT TOTAL = figures for impacts one measure over EU-27 ###################
 
-  out.total <- sim.all$impact_total
-
-
-  dt.meas <- as.data.table(merge(dt.meas,out.total,by='ncu'))
-
-  #add change
-  dt.meas[, D_Y := ((1+dY) * yield_ref_w) - yield_ref_w ]
-  dt.meas[, D_SOC := ((1+dSOC) * soc_ref) - soc_ref ]
-  dt.meas[, D_Nsu := ((1+dNsu) * n_sp_ref) - n_sp_ref ]
-
-
-  dt.EE <- dt.meas[man_code == "EE"]
-  dt.CF <- dt.meas[man_code == "CF-MF"]
-  dt.OF <- dt.meas[man_code == "OF-MF"]
-  dt.RFR <- dt.meas[man_code == "RFR"]
-  dt.RFT <- dt.meas[man_code == "RFT"]
-  dt.RFP <- dt.meas[man_code == "RFP"]
-
-
+  # out.total <- sim.all$impact_total
+  #
+  #
+  # dt.meas <- as.data.table(merge(dt.meas,out.total,by='ncu'))
+  #
+  # #add change
+  # dt.meas[, D_Y := ((1+dY) * yield_ref_w) - yield_ref_w ]
+  # dt.meas[, D_SOC := ((1+dSOC) * soc_ref) - soc_ref ]
+  # dt.meas[, D_Nsu := ((1+dNsu) * n_sp_ref) - n_sp_ref ]
+  #
+  #
+  # dt.EE <- dt.meas[man_code == "EE"]
+  # dt.CF <- dt.meas[man_code == "CF-MF"]
+  # dt.OF <- dt.meas[man_code == "OF-MF"]
+  # dt.RFR <- dt.meas[man_code == "RFR"]
+  # dt.RFT <- dt.meas[man_code == "RFT"]
+  # dt.RFP <- dt.meas[man_code == "RFP"]
 
 
 
-# testing % targets met for IMPACT_BEST ------------------------------------------------
+#===============================================================================
+# testing/mapping % targets met for IMPACT_BEST --------------------------------
+#===============================================================================
+
   #add new distance indices
   #add FINAL distance to targets index
 
@@ -350,14 +412,15 @@ out.best <- sim.all$impact_best
 
 
 #-------------------------------------------------
-
-  #subset to create raster for plots
+# subset to create raster for plots---------------------------------------------
   fact.rast <- fact.best[,.(ncu,dist_Y.x,dist_C.x,dist_N.x,dist_Y_fin,dist_C_fin,dist_N_fin)]
   fact.rast <- fact.best[,.(ncu,yield_ref,soc_ref,n_sp_ref)]
 
   fact.best.mean <- aggregate(.~man_code,data=fact.best,mean)
 
   fwrite(fact.best.mean,paste0(floc,'fact.best.mean.csv'))
+
+
 
 
 

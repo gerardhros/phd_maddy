@@ -1,4 +1,5 @@
 # Functions to run DST of Maddy
+#**** this is automatically sourced by dst_prepare_input_fert
 
 #Parameters to define as input when calling runDST
 #data tables are imported in dst_main
@@ -13,14 +14,16 @@
 #'
 #' @details
 #'  run the optimizer with the following options for output:
-#'  'total_impact' lists all impacts for ALL COMBO OF MEASURES
-#'                 returns various numbers of options per NCU with changes listed in all indicators
 #'
-#'                ???no distance to target or user weight used???
+#'  'all' gives the five following outputs:
+#'
+#'  'total_impact' lists all impacts for all combinations of measures
+#'                 returns various numbers of options per NCU with changes listed in all indicators
+#'                 maps of impacts for each and/or all measure options that can be applied
+#'
 #'
 #'  'best_impact' gives the one best option per NCU for total change in SOC, Nsp and yield
 #'                what are the changes in indicators when only the best measure or best combo of measures applied
-#'                includes distance to target and user weight used???
 #'
 #'  'score_single' gives the order of all single measures by how they contribute to reaching desired targets for indicators
 #'                 returns one ncu row with 6 columns ranking all measures individually
@@ -36,13 +39,13 @@
 
 
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-db = d1
-dt.m = dt.m
-output = 'best_impact'
-uw = c(1,1,1)
-simyear = 5
-quiet = FALSE
-nmax=2
+# db = d1
+# dt.m = dt.m
+# output = 'best_impact'
+# uw = c(1,1,1)
+# simyear = 5
+# quiet = FALSE
+# nmax=1
 
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
@@ -58,6 +61,8 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   d2[is.na(fr_rtnt), fr_rtnt := 0]
   # if RT is more than NT, the fraction is 1
 
+  # -----------ADDED AREA NCU HA FOR %AREA EU---------------
+  # --------------------------------------------------------
   # subset only the columns needed to estimate the DISTANCE TO TARGET for Yield, SOC and N surplus
   d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,yield_ref,yield_target,density,
               soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu,fr_rtnt)]
@@ -156,6 +161,8 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
   # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
+  # -----------ADDED AREA NCU HA FOR %AREA EU---------------
+  # --------------------------------------------------------
   d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
   cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
@@ -230,21 +237,25 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # make a sequence to split the database
   # YOU CAN ADAPT INTO LARGER LENGTH.OUT IF NEEDED FOR COMPUTER MEMORY
-  # CHANGE "0" TO MIN(DT$NCU) TO TEST FOR LOOP BELOW
+  # CHANGE "0" TO min(dt$ncu) TO TEST FOR LOOP BELOW
   ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 60)))
 
   # predefine i=1, or 2 etc. then can run line by line
-  # impacts calculated in subsets to enhance speed and avoid huge RAM usage
   # i=2
+  # impacts calculated in subsets to enhance speed and avoid huge RAM usage
+  # for loop goes through NCUs in subsets to save memory
+  # define min/max when running separate
+
   for(i in 2:length(ncu_steps)){
 
     # select the row numbers to subset
     ncu_min <- ncu_steps[i-1]
     ncu_max <- ncu_steps[i]
 
-    ncu_min = 1
-    ncu_max = 100
-    # subset the dataset
+    # can define min/max when running separate
+    # ncu_min = 1
+    # ncu_max = 100
+    # subset the dataset from the first ncu after the previous step up to the last ncu of this step
     dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
 
 
@@ -299,6 +310,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # e.g 1, 1, 8 = multiplied score by 1/10, 1/10, 8/10
     # define these first 3 rows in equations in paper
     # explain the s values definition (0 to 1)
+    # -------------------------------------------------------------------AREA NCU HA TOTAL-----
     dt.ss2 <- dt.ss[, list(bipmc = (sum(uw[1] * sY/fY,na.rm = T) +
                                       sum(uw[2] * sSOC/fSOC,na.rm = T) +
                                       sum(uw[3] * sNsu / fNsu,na.rm=T)) / sum(uw),
@@ -310,7 +322,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
                            dist_N=dist_N[1]),
                     by=.(ncu,cgid)] # each measure combo gets unique weighted impact sum; we have a bipmc value for each unique combo (cgid)
 
-    #up to here we have all measures
+    #up to here we have all measures--------------------------------------------
 
 
     # add a ranking based on the integral score for each ncu
@@ -322,11 +334,12 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
 
     # save into a list
+    # ---------------------------ADDED AREA NCU HA TOT--------------------------
     dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs)])
 
+    # this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
   }
 
-# for loop goes through NCUs in subsets to save memory; can define min/max when running separate
 
   # converts the list into a table (rowbind)
   dt.out <- rbindlist(dt.out)
@@ -367,6 +380,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
+    # ---------------------------ADDED AREA NCU HA TOT?--------------------------
     pout2 <- dt.out[bipmcs==6,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,ti_Y,ti_C,ti_N)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
@@ -395,9 +409,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
     pout4 = pout4[bipmcs==1]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
-<<<<<<< HEAD
+#<<<<<<< HEAD
     # pout4 <- dcast(pout4,ncu+dist_Y+dist_C+dist_N+tm_Y+tm_C+tm_N~bipmcs,value.var = 'man_code')
-=======
+#=======
     pout4a <- dcast(pout4,ncu+dist_Y+dist_C+dist_N~bipmcs,value.var = 'man_code')
 
     pout4[,tm_all := tm_Y + tm_C + tm_N]
@@ -405,7 +419,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
     pout4 = pout4[bipmcs==1]
     pout4[,]
->>>>>>> 4b2de830595cff818eaf3e359f6d23e71b5119d2
+#>>>>>>> 4b2de830595cff818eaf3e359f6d23e71b5119d2
 
     # pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N)][,bipmcs := frankv(bipmcs),by=ncu]
     # pout4 <- dt.out[bipmcs==1,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N)]
@@ -947,6 +961,7 @@ dsRA_new <- function(area_ncu,area_nuts2,lkh, nuts2,area_nuts2_all = NULL){
   return(value)
 
 }
+
 
 
 

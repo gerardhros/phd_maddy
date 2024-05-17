@@ -1,25 +1,29 @@
 
-# applies downscaling to NCUs and generates db_final_europe
+#################################################################################################
+#   Prepare inputs for DST MANAGEMENT-IMPACT ACROSS EUROPE
+#################################################################################################
 
-#################################################################################################
-#   DEVELOPMENT DECISION SUPPORT TOOL MANAGEMENT-IMPACT ACROSS EUROPE
-#################################################################################################
-  setwd('C:/phd_maddy/')
+# applies downscaling to NCUs and generates db_final_europe used for main script
+# this sources dst_loaddb as well as dst_functions_fert to prepare input dst_main_fert
+
+setwd('C:/phd_maddy/')
   # load packages
   require(readxl);require(data.table)
 
   # clear environment
   rm(list=ls())
 
-  # load all databases (this takes a few seconds). Result is loaded in environment.
+  # load all databases by running external script (this takes a few seconds). Result is loaded in environment.
   source('scripts/dst_loaddb.R')
 
-  # load functions for aggregation and optimisation DST
+  # load functions for aggregation and optimisation DST by running external script
   source('scripts/dst_functions_fert.r')
 
   # location of data objects not stored on github
   floc <- 'C:/dst_outputs/'
-  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+  # floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+
+
 #################################################################################################
 #   DOWNSCALING AREAL DISTRIBUTION OF MANAGEMENT STRATEGIES FROM EUROSTAT TO NCU LEVEL
 #################################################################################################
@@ -50,8 +54,9 @@
 
   # add total area of integrator per NUTS2 area
   d3[,area_int_nuts := sum(area_ncu*100,na.rm = TRUE), by =.(NUTS2)]
+  #d3[,area_ncu_ha_tot := sum(area_ncu*100,na.rm = TRUE), by =.(ncu)]
 
-  # join likelyhood continous cropping to the ncu database
+  # join likelihood continuous cropping to the ncu database
   d3 <- merge(d3,lkh.crop,by='crop_name',all.x=TRUE)
 
   # subset for testing purposes
@@ -253,9 +258,10 @@
     # remove
     d4[,c('country_description','nuts_name') := NULL]
 
-    #add letters to covariate names so that low/medium/high categories are different for each variable
+    #add letters to covariate names so that low/medium/high categories are distinguished differently for each variable
     d4[,cov_fert := paste0('f',cov_fert)]
     d4[,cov_soc := paste0('c',cov_soc)]
 
     # save file as csv
-    fwrite(d4,paste0(floc,'db_final_europe_y2.csv'))
+    fwrite(d4,paste0(floc,'db_final_europe.csv'))
+    # fwrite(d4,paste0(floc,'db_final_europe_y2.csv')) - previously saved with different name but this is identical

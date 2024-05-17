@@ -1,15 +1,18 @@
 
-#LOADING ORIGINAL INTEGRATOR/EUROSTAT DATABASES AND LIKELIHOODS
-#OUTPUTS USED IN DST PREPARE INPUT
 
 #################################################################################################
 #                       LOAD DATA: INTEGRATOR, CROP LIKELIHOODS
 #################################################################################################
 
+#this is automatically sourced by dst_prepare_input_fert and so it does not have to be run directly
+#LOAD ORIGINAL INTEGRATOR/EUROSTAT DATABASES AND LIKELIHOODS
+#OUTPUTS USED IN DST PREPARE INPUT
 # NOTES MADDY___________________________________
 #     last version before this one is 210805 (GR)
 #     data in R-inputs folder
 #________________________________________________
+
+
 
 # settings
   rm(list=ls())
@@ -18,19 +21,26 @@
   require(data.table); require(readxl)
 
   # location of data objects not stored on github
+  #   1. ncu/nuts spatial data (rds)
+  #   2. ncu data by crop area with fertilizer (xlsx)
+  #   3. capri crop names (xlsx)
+  #   4. ncu covariate categories (csv)
+  #   5. eurostat nuts2 codes (xls)
+  #   6. eurostat categories rotation/tillage/cover
   floc <- 'C:/dst_outputs/'
-  floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
+
+  # location for gerard
+  # floc <- 'D:/ESA/02 phd projects/01 maddy young/01 data/'
 
 # load database to link NCU to NUTS levels
 
   # load the database which contains NUTS levels per NCU (file prepared in make_ncu_nuts.r)
   ncu_nuts_id <- readRDS(paste0(floc,'ncu_nuts_3035.rds'))
 
-  #4,000,000 observations - this is total NCU spatial entities (raster cell groups)
+  # 4,000,000 observations - this is total NCU spatial entities (raster cell groups)
   # comes from NCU types (1 unique combo soil) repeated over multiple regions
 
-  # select only the unique combinations of ncu-nuts0-nuts1-nuts2
-  # this is due to fact that we join NCU with NUTS data on NUTS2 level (and not NUTS3)
+  # select unique combo of ncu-nuts0-nuts1-nuts2 to join NCUs to NUTS2 level (and not NUTS3)
   ncu_nuts_id <- unique(ncu_nuts_id[,.(ncu,NUTS0,NUTS1,NUTS2)])
   #lists the various NCU types and corresponding NUTS2 region(s) they are present in
   #think of as "farm types" with unique soil types, relief, etc...
@@ -403,4 +413,5 @@
   lkh.till[grepl('oliv|orang|wine|fruit|oil|tobac|grap',tolower(crop_name)), lh := 0]
   lkh.till[grepl('grassland|gras$',tolower(crop_name)), lh := 0]
   lkh.till[grepl('rape|cotton',tolower(crop_name)), lh := 0.2]
+
 

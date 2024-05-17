@@ -48,6 +48,11 @@ r.ncu[man_code == 'EE' , man_num := 3]
 r.ncu[man_code == 'RFR' , man_num := 4]
 r.ncu[man_code == 'RFT' , man_num := 5]
 r.ncu[man_code == 'RFP' , man_num := 6]
+r.ncu[man_code == 'RT-CT' , man_num := 7]
+r.ncu[man_code == 'NT-CT' , man_num := 8]
+r.ncu[man_code == 'ROT' , man_num := 9]
+r.ncu[man_code == 'CC' , man_num := 10]
+r.ncu[man_code == 'RES' , man_num := 11]
 
 # set columns in right order for conversion to raster
 setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num'))
@@ -56,7 +61,7 @@ setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num'))
 r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:4326'
 # write as output
-terra::writeRaster(r.fin,'products/out.best.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.new.tif', overwrite = TRUE)
 
 #===============================================================================
 # link raster to different output sets
@@ -116,6 +121,9 @@ terra::crs(r.fin) <- 'epsg:4326'
 # visualisation function of a raster file (its a global plot, so it still uses
 # object world2 as starting point (similar as your first plot function for EU map)
 # the argument ftitle is a string with the title that you want to plot on top of the figure
+
+install.packages("wesanderson")
+
 
 visualize <- function(raster, layer, name, breaks, labels, ftitle){
   # select the correct layer
@@ -196,14 +204,14 @@ visualize_cont <- function(raster, layer, name, breaks, labels, ftitle){
 }
 
 
-r.ncu <- merge(r1.p, dt.OF, by.x = 'gncu2010_ext', by.y = 'ncu')
-# set columns in right order for conversion to raster
-#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
+# r.ncu <- merge(r1.p, dt.OF, by.x = 'gncu2010_ext', by.y = 'ncu')
+# # set columns in right order for conversion to raster
+# #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# # set columns in right order for conversion to raster
+# setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
+# # convert to spatial raster
+# r.fin <- terra::rast(r.ncu,type='xyz')
+# terra::crs(r.fin) <- 'epsg:4326'
 
 #===============================================================================
 # applying EE on all EU-27 (NULL effects for C)
@@ -464,7 +472,7 @@ ggsave(filename = "products/n_sp_dist2.png",
 
 
 #===============================================================================
-# SCORE_SINGLE
+# BEST_IMPACT and individual RANKINGS
 #===============================================================================
 
 r.ncu <- merge(r1.p, out.single, by.x = 'gncu2010_ext', by.y = 'ncu')
@@ -534,6 +542,59 @@ p1 <- visualize_cont(raster = r.fin,
                          ftitle = 'Ranking combinations of individual measures')
 ggsave(filename = "products/out_ranking.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+#===============================================================================
+# BEST_IMPACT ALONE
+#===============================================================================
+
+#impact_best with 1 measure applied---------------------------------------------
+
+r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+#terra::writeRaster(r.fin,'products/out.best.new.tif', overwrite = TRUE)
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5),
+                         labels = c('CF-MF','OF-MF','EE','RFR',
+                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
+                         name = "Measures",
+                         ftitle = 'Best measures')
+ggsave(filename = "products/out_best_new.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+#impact_best with 2 measures applied--------------------------------------------
+r.ncu <- merge(r1.p, out.best.2, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+#terra::writeRaster(r.fin,'products/out.best.2.tif', overwrite = TRUE)
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5),
+                         labels = c('CF-MF','OF-MF','EE','RFR',
+                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
+                         name = "Measures",
+                         ftitle = 'Best measure combinations')
+ggsave(filename = "products/out_best_2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
 
 #===============================================================================
 # SCORE DUO
