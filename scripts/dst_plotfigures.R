@@ -26,6 +26,8 @@ theme_set(theme_bw())
 
 # get the raster to plot
 r1 <- terra::rast('products/gncu2010_ext.asc')
+# updated line to set the crs
+terra::crs(r1) <- 'epsg:3035'
 
 # convert to data.frame
 # adding na.rm=F solves the following error, even though the map not affected
@@ -58,10 +60,16 @@ r.ncu[man_code == 'RES' , man_num := 11]
 setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num'))
 
 # convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
+r.fin <- terra::rast(r.ncu,type='xyz',)
+terra::crs(r.fin) <- 'epsg:3035' #old line now repaced by 3035. change to 3035 if needed
 # write as output
-terra::writeRaster(r.fin,'products/out.best.new.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.eff.tif', overwrite = TRUE)
+
+
+
+
+
+
 
 #===============================================================================
 # link raster to different output sets
@@ -115,15 +123,12 @@ terra::crs(r.fin) <- 'epsg:4326'
 
 
 #===============================================================================
-# function from Gerard to make a map by each band/output
+# *** load functions to make a map by each band/output ****
 #===============================================================================
 
 # visualisation function of a raster file (its a global plot, so it still uses
 # object world2 as starting point (similar as your first plot function for EU map)
 # the argument ftitle is a string with the title that you want to plot on top of the figure
-
-install.packages("wesanderson")
-
 
 visualize <- function(raster, layer, name, breaks, labels, ftitle){
   # select the correct layer
@@ -151,11 +156,12 @@ visualize <- function(raster, layer, name, breaks, labels, ftitle){
     ggtitle(ftitle)
 }
 
+#use this for plotting measures/categories
 visualize_discrete <- function(raster, layer, name, breaks, labels, ftitle){
   # select the correct layer
   raster.int <- raster[layer]
-  # define crs
-  plotcrs <- coord_sf(crs = 4326, lims_method = "box")
+  # define crs - ***changed from 4326 to 3035***
+  plotcrs <- coord_sf(crs = 3035, lims_method = "box")
   #raster to xy
   df <- as.data.frame(raster.int, xy = TRUE)
   #colnames
@@ -203,6 +209,343 @@ visualize_cont <- function(raster, layer, name, breaks, labels, ftitle){
     ggtitle(ftitle)
 }
 
+
+
+#===============================================================================
+# plot and save figure files - BEST_IMPACT ALONE
+#===============================================================================
+
+#run first with each output then use the various plot functions
+r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# make man codes numeric
+r.ncu[man_code == 'CF-MF' , man_num := 1]
+r.ncu[man_code == 'OF-MF' , man_num := 2]
+r.ncu[man_code == 'EE' , man_num := 3]
+r.ncu[man_code == 'RFR' , man_num := 4]
+r.ncu[man_code == 'RFT' , man_num := 5]
+r.ncu[man_code == 'RFP' , man_num := 6]
+r.ncu[man_code == 'RT-CT' , man_num := 7]
+r.ncu[man_code == 'NT-CT' , man_num := 8]
+r.ncu[man_code == 'ROT' , man_num := 9]
+r.ncu[man_code == 'CC' , man_num := 10]
+r.ncu[man_code == 'RES' , man_num := 11]
+
+# with RFR removed
+r.ncu[man_code == 'CF-MF' , man_num := 1]
+r.ncu[man_code == 'OF-MF' , man_num := 2]
+r.ncu[man_code == 'EE' , man_num := 3]
+# r.ncu[man_code == 'RFR' , man_num := 4]
+r.ncu[man_code == 'RFT' , man_num := 4]
+r.ncu[man_code == 'RFP' , man_num := 5]
+r.ncu[man_code == 'RT-CT' , man_num := 6]
+r.ncu[man_code == 'NT-CT' , man_num := 7]
+r.ncu[man_code == 'ROT' , man_num := 8]
+r.ncu[man_code == 'CC' , man_num := 9]
+r.ncu[man_code == 'RES' , man_num := 10]
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:3035'
+
+# write as output for qgis
+terra::writeRaster(r.fin,'products/out.best.all.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.fert1.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.eff1.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.till1.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.crop1.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/out.best.all-10.tif', overwrite = TRUE)
+
+
+
+
+
+#------------------------------------------------------------------------------------------
+#impact_best with 1 measure applied
+#------------------------------------------------------------------------------------------
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5),
+                         labels = c('CF-MF','OF-MF','EE',
+                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
+                         name = "Measures",
+                         ftitle = 'Best measures')
+ggsave(filename = "products/out_best_all-10.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#------------------------------------------------------------------------------------------
+#       only fertilizer type - 1 measure
+# -----------------------------------------------------------------------------------------
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(0.5,1.5,2.5),
+                         labels = c('CF-MF','OF-MF'),
+                         name = "Measures",
+                         ftitle = 'Best nutrient type')
+ggsave(filename = "products/out_best_fert1.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#------------------------------------------------------------------------------------------
+#       only nutrient efficiency type - 1 measure
+# -----------------------------------------------------------------------------------------
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(2.5,3.5,4.5,5.5,6.5),
+                         labels = c('EE','RFR',
+                                    'RFT','RFP'),
+                         name = "Measures",
+                         ftitle = 'Best nutrient efficiency measure')
+ggsave(filename = "products/out_best_eff1.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#remove RFR
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(2.5,3.5,4.5,5.5),
+                         labels = c('EE',
+                                    'RFT','RFP'),
+                         name = "Measures",
+                         ftitle = 'Best nutrient efficiency measure')
+ggsave(filename = "products/out_best_eff-3.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#------------------------------------------------------------------------------------------
+#       only tillage - 1 measure
+# -----------------------------------------------------------------------------------------
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(6.5,7.5,8.5),
+                         labels = c('RT-CT','NT-CT'),
+                         name = "Measures",
+                         ftitle = 'Best tillage measure')
+ggsave(filename = "products/out_best_till1.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#------------------------------------------------------------------------------------------
+#       only cropping - 1 measure
+# -----------------------------------------------------------------------------------------
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(8.5,9.5,10.5,11.5),
+                         labels = c('ROT','CC','RES'),
+                         name = "Measures",
+                         ftitle = 'Best cropping measure')
+ggsave(filename = "products/out_best_crop1.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+
+
+
+
+
+
+
+#impact_best with 2 measures applied--------------------------------------------
+r.ncu <- merge(r1.p, out.best.2, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+# terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+#terra::writeRaster(r.fin,'products/out.best.2.tif', overwrite = TRUE)
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5),
+                         labels = c('CF-MF','OF-MF','EE','RFR',
+                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
+                         name = "Measures",
+                         ftitle = 'Best measure combinations')
+ggsave(filename = "products/out_best_2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+
+#===============================================================================
+# SCORE DUO
+#===============================================================================
+
+#impact_best
+r.ncu <- merge(r1.p, out.duo, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+#make man codes numeric for raster
+ord <- c('EE-RFR','EE-RFT','EE-RFP','RFP-RFT','RFR-RFT','CF-MF-EE','OF-MF-RFR','OF-MF-RFT','RFP-RFR',
+         'CF-MF-RFT','CF-MF-RFR','EE-OF-MF','CF-MF-OF-MF','OF-MF-RFP','CF-MF-RFP')
+r.ncu$man_num <- as.numeric(factor(r.ncu$man_code, levels=ord))
+
+r.ncu$`1` <- as.numeric(factor(r.ncu$`1`, levels=ord))
+r.ncu$`2` <- as.numeric(factor(r.ncu$`2`, levels=ord))
+r.ncu$`3` <- as.numeric(factor(r.ncu$`3`, levels=ord))
+r.ncu$`4` <- as.numeric(factor(r.ncu$`4`, levels=ord))
+r.ncu$`5` <- as.numeric(factor(r.ncu$`5`, levels=ord))
+r.ncu$`6` <- as.numeric(factor(r.ncu$`6`, levels=ord))
+r.ncu$`7` <- as.numeric(factor(r.ncu$`7`, levels=ord))
+r.ncu$`8` <- as.numeric(factor(r.ncu$`8`, levels=ord))
+r.ncu$`9` <- as.numeric(factor(r.ncu$`9`, levels=ord))
+r.ncu$`10` <- as.numeric(factor(r.ncu$`10`, levels=ord))
+r.ncu$`11` <- as.numeric(factor(r.ncu$`11`, levels=ord))
+r.ncu$`12` <- as.numeric(factor(r.ncu$`12`, levels=ord))
+r.ncu$`13` <- as.numeric(factor(r.ncu$`13`, levels=ord))
+r.ncu$`14` <- as.numeric(factor(r.ncu$`14`, levels=ord))
+r.ncu$`15` <- as.numeric(factor(r.ncu$`15`, levels=ord))
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
+
+
+# set columns in right order for conversion to raster
+#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','1','2','3','4','5','6','7','8',
+#                     '9','10','11','12','13','14','15'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+#terra::writeRaster(r.fin,'products/out.duo.tif', overwrite = TRUE)
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'man_num',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5),
+                         labels = c('EE + RFR','EE + RFT','EE + RFP','RFP + RFT','RFR + RFT','CF + EE','OF + RFR','OF + RFT','RFP + RFR',
+                                    'CF + RFT','CF + RFR','EE + OF','CF + OF','OF + RFP','CF + RFP'),
+                         name = "Measures",
+                         ftitle = 'Best combination of two measures')
+ggsave(filename = "products/out_duo.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+#===============================================================================
+# SCORE TRIO
+#===============================================================================
+
+#impact_best
+r.ncu <- merge(r1.p, out.trio, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+#make man codes numeric for raster
+ord <- c('EE-RFR','CF-MF-EE','EE-RFT','CF-MF-RFT','CF-MF-RFR','CF-MF-OF-MF','CF-MF-RFP','EE-OF-MF',
+         'OF-MF-RFP','OF-MF-RFT','RFP-RFT','RFR-RFT','OF-MF-RFR','RFP-RFR')
+
+r.ncu$`1` <- as.numeric(factor(r.ncu$`1`, levels=ord))
+r.ncu$`2` <- as.numeric(factor(r.ncu$`2`, levels=ord))
+r.ncu$`3` <- as.numeric(factor(r.ncu$`3`, levels=ord))
+r.ncu$`4` <- as.numeric(factor(r.ncu$`4`, levels=ord))
+r.ncu$`5` <- as.numeric(factor(r.ncu$`5`, levels=ord))
+r.ncu$`6` <- as.numeric(factor(r.ncu$`6`, levels=ord))
+r.ncu$`7` <- as.numeric(factor(r.ncu$`7`, levels=ord))
+r.ncu$`8` <- as.numeric(factor(r.ncu$`8`, levels=ord))
+r.ncu$`9` <- as.numeric(factor(r.ncu$`9`, levels=ord))
+r.ncu$`10` <- as.numeric(factor(r.ncu$`10`, levels=ord))
+r.ncu$`11` <- as.numeric(factor(r.ncu$`11`, levels=ord))
+r.ncu$`12` <- as.numeric(factor(r.ncu$`12`, levels=ord))
+r.ncu$`13` <- as.numeric(factor(r.ncu$`13`, levels=ord))
+r.ncu$`14` <- as.numeric(factor(r.ncu$`14`, levels=ord))
+r.ncu$`15` <- as.numeric(factor(r.ncu$`15`, levels=ord))
+
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','1','2','3','4','5','6','7','8',
+                     '9','10','11','12','13','14','15'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/out.trio.tif', overwrite = TRUE)
+
+
+
+#===============================================================================
+# Reference values
+#===============================================================================
+
+r.ncu <- merge(r1.p, ref.values, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref','soc_ref','n_sp_ref','yield_target','soc_target'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/ref.values.tif', overwrite = TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+# TEST 1 where missing models are NA
+# - saved as output 3a NA model
+
+# =========== OPTION 1 - ranking of 6 measures ===========
+#
+# missing models replaced with 0.0001
+# (many categories ~400)
+# ========================================================
+
+# join/merge output.3a  with r1.p
+r.ncu <- merge(r1.p, output.3a, by.x = 'gncu2010_ext', by.y = 'ncu')
+# concatenate into single column for raster symbology
+r.ncu$concat <- as.numeric(paste0(r.ncu$`CF-MF`, r.ncu$`OF-MF`, r.ncu$EE, r.ncu$RFR, r.ncu$RFT, r.ncu$RFP))
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext', 'concat', 'CF-MF', 'OF-MF', 'EE', 'RFR', 'RFT', 'RFP'))
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/output.3a2.tif', overwrite = TRUE)
+
+
+# =========== OPTION 2 - one best measure ================
+#
+# missing models replaced with 0.0001
+# (6 categories)
+# ========================================================
+
+# join/merge output.2a  with r1.p
+r.ncu <- merge(r1.p, output1, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# make man codes numeric
+### try later ###
+# better is to replace this part of code by r.ncu[, man_num := as.numeric(as.factor(man_code))]
+r.ncu[man_code == 'CF-MF' , man_num := 1]
+r.ncu[man_code == 'OF-MF' , man_num := 2]
+r.ncu[man_code == 'EE' , man_num := 3]
+r.ncu[man_code == 'RFR' , man_num := 4]
+r.ncu[man_code == 'RFT' , man_num := 5]
+r.ncu[man_code == 'RFP' , man_num := 6]
+
+# set columns in right order for conversion to raster
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
+
+# convert to spatial raster
+r.fin <- terra::rast(r.ncu,type='xyz')
+#warning messages above showed up here
+
+terra::crs(r.fin) <- 'epsg:4326'
+# write as output
+terra::writeRaster(r.fin,'products/output1_test.tif', overwrite = TRUE)
+
+
+
+
+
+# PREVIOUS CODE FOR PLOTS FROM IFS PAPER
+# includes reference plots for indicators
 
 # r.ncu <- merge(r1.p, dt.OF, by.x = 'gncu2010_ext', by.y = 'ncu')
 # # set columns in right order for conversion to raster
@@ -510,20 +853,20 @@ terra::crs(r.fin) <- 'epsg:4326'
 terra::writeRaster(r.fin,'products/out.single.tif', overwrite = TRUE)
 
 p1 <- visualize_discrete(raster = r.fin,
-                layer = 'R1',
-                breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5),
-                labels = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
-                name = "Measure",
-                ftitle = 'Best individual measure')
+                         layer = 'R1',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5),
+                         labels = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
+                         name = "Measure",
+                         ftitle = 'Best individual measure')
 ggsave(filename = "products/out_best.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 p1 <- visualize_discrete(raster = r.fin,
-                layer = 'R2',
-                breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5),
-                labels = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
-                name = "Measure",
-                ftitle = 'Second best individual measure')
+                         layer = 'R2',
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5),
+                         labels = c('CF-MF','OF-MF','EE','RFR','RFT','RFP'),
+                         name = "Measure",
+                         ftitle = 'Second best individual measure')
 ggsave(filename = "products/out_second.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
@@ -537,231 +880,9 @@ ggsave(filename = "products/out_third.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 p1 <- visualize_cont(raster = r.fin,
-                         layer = 'concat',
-                         name = "Ranked order",
-                         ftitle = 'Ranking combinations of individual measures')
+                     layer = 'concat',
+                     name = "Ranked order",
+                     ftitle = 'Ranking combinations of individual measures')
 ggsave(filename = "products/out_ranking.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
-
-#===============================================================================
-# BEST_IMPACT ALONE
-#===============================================================================
-
-#impact_best with 1 measure applied---------------------------------------------
-
-r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/out.best.new.tif', overwrite = TRUE)
-
-p1 <- visualize_discrete(raster = r.fin,
-                         layer = 'man_num',
-                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5),
-                         labels = c('CF-MF','OF-MF','EE','RFR',
-                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
-                         name = "Measures",
-                         ftitle = 'Best measures')
-ggsave(filename = "products/out_best_new.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-
-#impact_best with 2 measures applied--------------------------------------------
-r.ncu <- merge(r1.p, out.best.2, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/out.best.2.tif', overwrite = TRUE)
-
-p1 <- visualize_discrete(raster = r.fin,
-                         layer = 'man_num',
-                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5),
-                         labels = c('CF-MF','OF-MF','EE','RFR',
-                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
-                         name = "Measures",
-                         ftitle = 'Best measure combinations')
-ggsave(filename = "products/out_best_2.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-
-
-#===============================================================================
-# SCORE DUO
-#===============================================================================
-
-#impact_best
-r.ncu <- merge(r1.p, out.duo, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-#make man codes numeric for raster
-ord <- c('EE-RFR','EE-RFT','EE-RFP','RFP-RFT','RFR-RFT','CF-MF-EE','OF-MF-RFR','OF-MF-RFT','RFP-RFR',
-         'CF-MF-RFT','CF-MF-RFR','EE-OF-MF','CF-MF-OF-MF','OF-MF-RFP','CF-MF-RFP')
-r.ncu$man_num <- as.numeric(factor(r.ncu$man_code, levels=ord))
-
-r.ncu$`1` <- as.numeric(factor(r.ncu$`1`, levels=ord))
-r.ncu$`2` <- as.numeric(factor(r.ncu$`2`, levels=ord))
-r.ncu$`3` <- as.numeric(factor(r.ncu$`3`, levels=ord))
-r.ncu$`4` <- as.numeric(factor(r.ncu$`4`, levels=ord))
-r.ncu$`5` <- as.numeric(factor(r.ncu$`5`, levels=ord))
-r.ncu$`6` <- as.numeric(factor(r.ncu$`6`, levels=ord))
-r.ncu$`7` <- as.numeric(factor(r.ncu$`7`, levels=ord))
-r.ncu$`8` <- as.numeric(factor(r.ncu$`8`, levels=ord))
-r.ncu$`9` <- as.numeric(factor(r.ncu$`9`, levels=ord))
-r.ncu$`10` <- as.numeric(factor(r.ncu$`10`, levels=ord))
-r.ncu$`11` <- as.numeric(factor(r.ncu$`11`, levels=ord))
-r.ncu$`12` <- as.numeric(factor(r.ncu$`12`, levels=ord))
-r.ncu$`13` <- as.numeric(factor(r.ncu$`13`, levels=ord))
-r.ncu$`14` <- as.numeric(factor(r.ncu$`14`, levels=ord))
-r.ncu$`15` <- as.numeric(factor(r.ncu$`15`, levels=ord))
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
-
-
-# set columns in right order for conversion to raster
-#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','1','2','3','4','5','6','7','8',
-#                     '9','10','11','12','13','14','15'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/out.duo.tif', overwrite = TRUE)
-
-p1 <- visualize_discrete(raster = r.fin,
-                         layer = 'man_num',
-                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5),
-                         labels = c('EE + RFR','EE + RFT','EE + RFP','RFP + RFT','RFR + RFT','CF + EE','OF + RFR','OF + RFT','RFP + RFR',
-                                    'CF + RFT','CF + RFR','EE + OF','CF + OF','OF + RFP','CF + RFP'),
-                         name = "Measures",
-                         ftitle = 'Best combination of two measures')
-ggsave(filename = "products/out_duo.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
-
-#===============================================================================
-# SCORE TRIO
-#===============================================================================
-
-#impact_best
-r.ncu <- merge(r1.p, out.trio, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-#make man codes numeric for raster
-ord <- c('EE-RFR','CF-MF-EE','EE-RFT','CF-MF-RFT','CF-MF-RFR','CF-MF-OF-MF','CF-MF-RFP','EE-OF-MF',
-         'OF-MF-RFP','OF-MF-RFT','RFP-RFT','RFR-RFT','OF-MF-RFR','RFP-RFR')
-
-r.ncu$`1` <- as.numeric(factor(r.ncu$`1`, levels=ord))
-r.ncu$`2` <- as.numeric(factor(r.ncu$`2`, levels=ord))
-r.ncu$`3` <- as.numeric(factor(r.ncu$`3`, levels=ord))
-r.ncu$`4` <- as.numeric(factor(r.ncu$`4`, levels=ord))
-r.ncu$`5` <- as.numeric(factor(r.ncu$`5`, levels=ord))
-r.ncu$`6` <- as.numeric(factor(r.ncu$`6`, levels=ord))
-r.ncu$`7` <- as.numeric(factor(r.ncu$`7`, levels=ord))
-r.ncu$`8` <- as.numeric(factor(r.ncu$`8`, levels=ord))
-r.ncu$`9` <- as.numeric(factor(r.ncu$`9`, levels=ord))
-r.ncu$`10` <- as.numeric(factor(r.ncu$`10`, levels=ord))
-r.ncu$`11` <- as.numeric(factor(r.ncu$`11`, levels=ord))
-r.ncu$`12` <- as.numeric(factor(r.ncu$`12`, levels=ord))
-r.ncu$`13` <- as.numeric(factor(r.ncu$`13`, levels=ord))
-r.ncu$`14` <- as.numeric(factor(r.ncu$`14`, levels=ord))
-r.ncu$`15` <- as.numeric(factor(r.ncu$`15`, levels=ord))
-
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','1','2','3','4','5','6','7','8',
-                     '9','10','11','12','13','14','15'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-terra::writeRaster(r.fin,'products/out.trio.tif', overwrite = TRUE)
-
-
-
-#===============================================================================
-# Reference values
-#===============================================================================
-
-r.ncu <- merge(r1.p, ref.values, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref','soc_ref','n_sp_ref','yield_target','soc_target'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-terra::writeRaster(r.fin,'products/ref.values.tif', overwrite = TRUE)
-
-
-
-
-
-
-
-
-
-
-
-
-# TEST 1 where missing models are NA
-# - saved as output 3a NA model
-
-# =========== OPTION 1 - ranking of 6 measures ===========
-#
-# missing models replaced with 0.0001
-# (many categories ~400)
-# ========================================================
-
-# join/merge output.3a  with r1.p
-r.ncu <- merge(r1.p, output.3a, by.x = 'gncu2010_ext', by.y = 'ncu')
-# concatenate into single column for raster symbology
-r.ncu$concat <- as.numeric(paste0(r.ncu$`CF-MF`, r.ncu$`OF-MF`, r.ncu$EE, r.ncu$RFR, r.ncu$RFT, r.ncu$RFP))
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext', 'concat', 'CF-MF', 'OF-MF', 'EE', 'RFR', 'RFT', 'RFP'))
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-terra::writeRaster(r.fin,'products/output.3a2.tif', overwrite = TRUE)
-
-
-# =========== OPTION 2 - one best measure ================
-#
-# missing models replaced with 0.0001
-# (6 categories)
-# ========================================================
-
-# join/merge output.2a  with r1.p
-r.ncu <- merge(r1.p, output1, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-# make man codes numeric
-### try later ###
-# better is to replace this part of code by r.ncu[, man_num := as.numeric(as.factor(man_code))]
-r.ncu[man_code == 'CF-MF' , man_num := 1]
-r.ncu[man_code == 'OF-MF' , man_num := 2]
-r.ncu[man_code == 'EE' , man_num := 3]
-r.ncu[man_code == 'RFR' , man_num := 4]
-r.ncu[man_code == 'RFT' , man_num := 5]
-r.ncu[man_code == 'RFP' , man_num := 6]
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num','dY','dist_Y','dSOC','dist_C','dNsu','dist_N','man_code'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-#warning messages above showed up here
-
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-terra::writeRaster(r.fin,'products/output1_test.tif', overwrite = TRUE)

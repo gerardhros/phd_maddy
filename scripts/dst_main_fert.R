@@ -23,7 +23,7 @@
 setwd('C:/phd_maddy')
 
 # load packages
-require(readxl);require(data.table); require(dplyr); library(plyr)
+require(readxl);require(data.table); library(plyr); library(dplyr); require(dplyr)
 
 # remove data
 rm(list=ls())
@@ -45,7 +45,7 @@ d1 <- fread(paste0(floc,'db_final_europe.csv'))
 # d1 <- d1[ncu<1000]
 
 # reverse the names for reference and target yield because they were switched in NCU dataset
-setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref')) #???
+#setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref')) #???
 
 # load the global AND covariate meta-models when available
 ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_till_crop_meas.xlsx')
@@ -54,7 +54,7 @@ ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_till_crop_meas.xlsx')
 # join MA impact models for all measures (fertilizer + tillage + cropping)
 dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models, covar = FALSE)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models, covar = FALSE)
-dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models, covar = FALSE)
+#dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models, covar = FALSE)
 dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models, covar = FALSE)
 dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = TRUE)
 dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
@@ -64,10 +64,35 @@ dt.m9 <- cIMAm(management='RES',db = d1, mam = ma_models, covar = TRUE)
 dt.m10 <- cIMAm(management='ROT',db = d1, mam = ma_models, covar = TRUE)
 dt.m11 <- cIMAm(management='RT-CT',db = d1, mam = ma_models, covar = TRUE)
 
-# combine all measures and their impacts into one data.table
-# [ ncu / areas / indicator name / management name / mean impact / sd impact ]
-dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
-rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
+# Combine various combinations or remove measures-------------------------------
+
+# # ALL-11 combine all measures and their impacts into one data.table
+# # [ ncu / areas / indicator name / management name / mean impact / sd impact ]
+# dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
+# rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
+#
+# #nutrient type only
+# dt.m <- rbind(dt.m5,dt.m6)
+# rm(dt.m5,dt.m6)
+# #nutrient efficiency only
+# dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4)
+# rm(dt.m1,dt.m2,dt.m3,dt.m4)
+# #nutrient efficiency only *** RFR REMOVED
+# dt.m <- rbind(dt.m1,dt.m2,dt.m4)
+# rm(dt.m1,dt.m2,dt.m4)
+# #tillage only
+# dt.m <- rbind(dt.m8,dt.m11)
+# rm(dt.m8,dt.m11)
+# #cropping only
+# dt.m <- rbind(dt.m7,dt.m9,dt.m10)
+# rm(dt.m7,dt.m9,dt.m10)
+
+
+
+
+# Use standard all-10 remove RFR------------------------------------------------
+dt.m <- rbind(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
+rm(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 
 # save meta-model tables in csv in outputs
 ma.models <- data.frame(ma_models$ma_mean,ma_models$ma_sd)
@@ -230,10 +255,17 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),sim
 # DST simulation for impact_best
 #=====================================================================================
 
+# to run for groups of measures (fertilizer type, nutrient efficiency, soil, crop)
+# 1. remove other measures in dt.m above
+# 2. change bipmcs in runDST function to 1
+# IMPORTANT check bipmcs for other results because this should be 7???)
+#  score_duo  score_trio    output=best_impact out.best=$impact_best
+# farmer weights = 2, 1, 1
+# multi-stakeholder weights = 4, 3, 3
 
 sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
-# save 1 best measure
+# store output
 out.best <- sim.all$impact_best
 
   #frequency of best measures - make table for single rankings
@@ -249,28 +281,134 @@ out.best <- sim.all$impact_best
   N_initial <- sum(out.best$ti_N)/29476
   N_final <- sum(out.best$tm_N)/29476
 
-  # calculate total area of each ncu and add it to d1
-  d1[,area_ncu_ha_tot := sum(area_ncu_ha,na.rm = TRUE), by =.(ncu)]
-  test <- data.frame(ncu=d1$ncu,area_ncu_ha_tot=d1$area_ncu_ha_tot)
-  test <- aggregate(.~ncu,data=test,mean)
+  # ----- DOES NOT WORK - here tried to calculate total area of each ncu and weighted reference values------
+  # d1[,area_ncu_ha_tot := sum(area_ncu_ha,na.rm = TRUE), by =.(ncu)]
+  # add to data frame to merge with out.best
+  # retain reference values for indicators to calculate total impacts per measure
+  # test <- data.frame(ncu=d1$ncu,area_ncu_ha=d1$area_ncu_ha,yield_ref=d1$yield_ref,soc_ref=d1$soc_ref,n_sp_ref=d1$n_sp_ref,bd=d1$density)
+  # test1 <- aggregate(.~ncu,data=test,mean)
+  # test2 <- aggregate(.~ncu,data=test,function(x) weighted.mean(x=test$yield_ref,w=test$area_ncu_ha,na.rm=T))
+  #
+  # sub_d1 <- d1[ncu<100]
+  # fwrite(sub_d1,paste0(floc,'sub_d1.csv'))
+  # sub_test <- data.frame(ncu=sub_d1$ncu,area_ncu_ha=sub_d1$area_ncu_ha,yield_ref=sub_d1$yield_ref,soc_ref=sub_d1$soc_ref,n_sp_ref=sub_d1$n_sp_ref,bd=sub_d1$density)
+  # sub_cols <- colnames(sub_test)[grepl('^bd|^yield_ref|^soc_ref|^n_sp_ref',colnames(sub_test))] #store col names
+  # test_sub <- sub_test[,lapply(.SD,function(x) weighted.mean(x,area_ncu_ha,na.rm=T)),.SDcols = sub_cols,by=c('ncu')]
+  #
+  #
+  # #d1.fact.t <- d1.fact[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
+  # cols <- colnames(test)[grepl('^bd|^yield_ref|^soc_ref|^n_sp_ref',colnames(test))] #store col names
+  # test2 <- test[,lapply(.SD,function(x) weighted.mean(x,area_ncu_ha,na.rm=T)),.SDcols = cols,by=c('ncu')]
+  #
+  # #merge area_ncu_ha_tot with out.best
+  # out.best <- merge(out.best,test,by='ncu')
+  # -------------------------------------------------------------------------------------------
 
-  #merge area_ncu_ha_tot with out.best
-  out.best <- merge(out.best,test,by='ncu')
+  #add absolute change
+  out.best[, D_Y := ((1+dY) * yield_ref) - yield_ref ]
+  out.best[, D_SOC := ((1+dSOC) * soc_ref) - soc_ref ]
+  out.best[, D_Nsu := ((1+dNsu) * n_sp_ref) - n_sp_ref ]
+
+  mean_D_Y <- mean(out.best$D_Y) #kg/ha
+  mean_D_C <- mean(out.best$D_SOC) #%/ha - ADD BD TO FUNCTIONS TO CALCULATE SOC STOCK
+  mean_D_N <- mean(out.best$D_Nsu) #kg/ha
+
+
+  # dt.EE <- dt.meas[man_code == "EE"]
+  # dt.CF <- dt.meas[man_code == "CF-MF"]
+  # dt.OF <- dt.meas[man_code == "OF-MF"]
+  # dt.RFR <- dt.meas[man_code == "RFR"]
+  # dt.RFT <- dt.meas[man_code == "RFT"]
+  # dt.RFP <- dt.meas[man_code == "RFP"]
+
 
   #calculate total ncu land area
   tot_area <- sum(out.best$area_ncu_ha_tot)
 
-  #sum area total initial yield targets met
+  # sum area total initial targets met
+  # yield
   out.best[,ti_Ya := fifelse(ti_Y == 1,area_ncu_ha_tot,0)]
   ti_Ya_tot <- sum(out.best$ti_Ya)
   Y_init_area <- ti_Ya_tot/tot_area
+  # SOC
+  out.best[,ti_Ca := fifelse(ti_C == 1,area_ncu_ha_tot,0)]
+  ti_Ca_tot <- sum(out.best$ti_Ca)
+  C_init_area <- ti_Ca_tot/tot_area
+  # N surplus
+  out.best[,ti_Na := fifelse(ti_N == 1,area_ncu_ha_tot,0)]
+  ti_Na_tot <- sum(out.best$ti_Na)
+  N_init_area <- ti_Na_tot/tot_area
 
-  out.best[,ti_Ya := fifelse(ti_Y == 1,area_ncu_ha_tot,0)]
-  ti_Ya_tot <- sum(out.best$ti_Ya)
-  Y_init_area <- ti_Ya_tot/tot_area
+  # final area targets met
+  # yield
+  out.best[,tf_Ya := fifelse(tm_Y == 1,area_ncu_ha_tot,0)]
+  tf_Ya_tot <- sum(out.best$tf_Ya)
+  Y_fin_area <- tf_Ya_tot/tot_area
+  # SOC
+  out.best[,tf_Ca := fifelse(tm_C == 1,area_ncu_ha_tot,0)]
+  tf_Ca_tot <- sum(out.best$tf_Ca)
+  C_fin_area <- tf_Ca_tot/tot_area
+  # N surplus
+  out.best[,tf_Na := fifelse(tm_N == 1,area_ncu_ha_tot,0)]
+  tf_Na_tot <- sum(out.best$tf_Na)
+  N_fin_area <- tf_Na_tot/tot_area
+
+#save the metrics for targets met - final area, %area, %ncus
+target_metrics <- data.frame(Y_fin_area*100, Y_final*100, tf_Ya_tot/100, C_fin_area*100, C_final*100, tf_Ca_tot/100, N_fin_area*100, N_final*100, tf_Na_tot/100)
+target_metrics
+# various outputs for target metrics saved depending on measures included
+fwrite(target_metrics,paste0(floc,'target_metrics_all-11.csv')) #all measures in model
+fwrite(target_metrics,paste0(floc,'target_metrics_all-10.csv')) #RFR removed
+fwrite(target_metrics,paste0(floc,'target_metrics_fert-4.csv'))   #nutrient type only
+fwrite(target_metrics,paste0(floc,'target_metrics_fert-3.csv')) #RFR removed
+fwrite(target_metrics,paste0(floc,'target_metrics_eff.csv'))    #nutrient efficiency only
+fwrite(target_metrics,paste0(floc,'target_metrics_till.csv'))   #tillage only
+fwrite(target_metrics,paste0(floc,'target_metrics_crop.csv'))   #crop only
+fwrite(target_metrics,paste0(floc,'target_metrics_duo.csv'))    #2 combined measures
+fwrite(target_metrics,paste0(floc,'target_metrics_duo-10.csv')) #RFR removed
+fwrite(target_metrics,paste0(floc,'target_metrics_crop.csv'))   #3 combined measures
+fwrite(target_metrics,paste0(floc,'target_metrics_all_uF.csv')) #user weight farmers
+fwrite(target_metrics,paste0(floc,'target_metrics_duo_uF.csv')) #user weight farmers
+fwrite(target_metrics,paste0(floc,'target_metrics_all_uS.csv')) #user weight multi-stakeholders
+fwrite(target_metrics,paste0(floc,'target_metrics_all_uY10.csv')) #test of u=10,1,1
 
 
-  #d4[parea.nifnof > 0,fert_type := 'nifnof']
+freq_meas <- data.frame(table(out.best$man_code))
+freq_meas
+fwrite(freq_meas,paste0(floc,'freq_meas_all-11.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_all-10.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_fert-4.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_fert-3.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_eff.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_till.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_crop.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_duo.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_duo-10.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_trio.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_all_uF.csv'))
+fwrite(freq_meas,paste0(floc,'freq_meas_duo_uF.csv'))
+
+fwrite(freq_meas,paste0(floc,'freq_meas_all_uY10.csv')) #test of u=10,1,1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #use for testing smaller dataset ---------------------------------------------
   #e.g. ncu<1000 = 598 ncus actually in the dataset / ncu<5000=2032

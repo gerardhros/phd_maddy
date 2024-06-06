@@ -39,7 +39,7 @@
 
 
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-# db = d1
+# db = d1[ncu==1]
 # dt.m = dt.m
 # output = 'best_impact'
 # uw = c(1,1,1)
@@ -64,8 +64,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # -----------ADDED AREA NCU HA FOR %AREA EU---------------
   # --------------------------------------------------------
   # subset only the columns needed to estimate the DISTANCE TO TARGET for Yield, SOC and N surplus
-  d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,yield_ref,yield_target,density,
+  # ****May 2024 - added area_ncu_ha to calculate areal totals
+  d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,area_ncu_ha,yield_ref,yield_target,density,
               soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu,fr_rtnt)]
+  d2[,area_ncu_ha_tot := sum(area_ncu_ha,na.rm = TRUE), by =.(ncu)]
 
   # re-arrange the table of MA models (object dt.m) to facilitate joining with integrator data
   dtm.mean <- dcast(dt.m,ncu + man_code ~ indicator, value.var = c('mmean','msd'))
@@ -163,9 +165,17 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
   # -----------ADDED AREA NCU HA FOR %AREA EU---------------
   # --------------------------------------------------------
-  d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
-  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
-  d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
+  # d3 <- d3[,.(ncu,crop_name,man_code,NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
+  # cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
+  # d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
+
+  # CHANGED THESE LINES TO TEST WEIGHTED REFERENCE VALUES
+  # **this uses weighted means on the scores for the final outcome, BUT are target/reference values weighted by area anywhere?
+  # --------------------------------------------------------
+  d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,area_ncu_ha_tot,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N,yield_ref,soc_ref,n_sp_ref)] #subset
+  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref',colnames(d3))] #store col names
+  d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code','area_ncu_ha_tot')]
+
 
   # estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION
 
@@ -240,7 +250,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # CHANGE "0" TO min(dt$ncu) TO TEST FOR LOOP BELOW
   ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 60)))
 
-  # predefine i=1, or 2 etc. then can run line by line
+  # predefine i=1, or 2 etc. then can run line by line. Use i=2 to run for ncu=1
   # i=2
   # impacts calculated in subsets to enhance speed and avoid huge RAM usage
   # for loop goes through NCUs in subsets to save memory
@@ -310,16 +320,20 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # e.g 1, 1, 8 = multiplied score by 1/10, 1/10, 8/10
     # define these first 3 rows in equations in paper
     # explain the s values definition (0 to 1)
-    # -------------------------------------------------------------------AREA NCU HA TOTAL-----
+    # ------------**May 2024 added AREA NCU HA TOTAL, weighted reference values-----
     dt.ss2 <- dt.ss[, list(bipmc = (sum(uw[1] * sY/fY,na.rm = T) +
                                       sum(uw[2] * sSOC/fSOC,na.rm = T) +
                                       sum(uw[3] * sNsu / fNsu,na.rm=T)) / sum(uw),
                            dY = sum(dY/odY),                 #sum is there only for combined measures because must sum up each
                            dSOC = sum(dSOC/odSOC), # divide col dY by oDY and then sum them across combined measures (dividing by a score of 1/2/3 gives 100/50/33 effect)
                            dNsu = sum(dNsu/oNsu), # here we also want average change in yield, etc. summed per indicator for all combos per ncu - multiplying by "d" gives us right direction and summing up impacts based on ordered score O
-                           dist_Y=dist_Y[1],
+                           dist_Y=dist_Y[1], # these are same over one ncu so save first row d[1]
                            dist_C=dist_C[1],
-                           dist_N=dist_N[1]),
+                           dist_N=dist_N[1],
+                           yield_ref=yield_ref[1], #added area-weighted reference values to do final calculations
+                           soc_ref=soc_ref[1],
+                           n_sp_ref=n_sp_ref[1],
+                           area_ncu_ha_tot=area_ncu_ha_tot[1]),
                     by=.(ncu,cgid)] # each measure combo gets unique weighted impact sum; we have a bipmc value for each unique combo (cgid)
 
     #up to here we have all measures--------------------------------------------
@@ -334,8 +348,8 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
 
     # save into a list
-    # ---------------------------ADDED AREA NCU HA TOT--------------------------
-    dt.out[[i]] <- copy(dt.ss2[,.(ncu,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs)])
+    # **May 2024 ADDED AREA NCU HA TOT, area-weighted reference values--------------------------
+    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs,yield_ref,soc_ref,n_sp_ref)])
 
     # this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
   }
@@ -375,17 +389,19 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     setorder(pout1,ncu)
   } else {pout1 = NULL}
 
-  # the case where only best measure (or combination of measures) have been applied
+  # the case where only best measure (or best combination of measures) have been applied
+  # the best ranking is chosen, whether the best is one measure or a combination
   # show the changes in indicators as well as distance to target status
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
-    # ---------------------------ADDED AREA NCU HA TOT?--------------------------
-    pout2 <- dt.out[bipmcs==6,.(ncu,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,ti_Y,ti_C,ti_N)]
+    # BIPMCS MUST BE CHANGED TO 1 for best measure and 11 for worst measure
+    # **May 2024 weighted reference values and total ha per ncu
+    pout2 <- dt.out[bipmcs==1,.(ncu,area_ncu_ha_tot,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
-  # collect the ORDER/RANKING of the single measures
+  # collect the ORDER/RANKING of the single measures if applied separately
   # ranking of each individual measure in a column
   # filtering by single measures
   if(sum(grepl('score_single|all',output))>0){
@@ -401,6 +417,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   } else {pout3 = NULL}
 
   # collect the ORDER/RANKING of TWO combinations of measures
+  # selects the output where nmax is 2, ranks by bipmcs metric, selects #1
   if(sum(grepl('score_duo|all',output))>0 & nmax >= 2){
 
     # select relevant data and sort
@@ -428,6 +445,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   } else {pout4 = NULL}
 
   # collect the ORDER/RANKING of THREE combinations of measures
+  # selects the output where nmax is 3, ranks by bipmcs metric, selects #1
   if(sum(grepl('score_trio|all',output))>0 & nmax >= 3){
 
     pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
