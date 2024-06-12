@@ -162,20 +162,24 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # here the "factor" is adapted per area. E.g. 50% change in C expected for half the NCU area = 25% change mapped over the whole area
 
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
-  # sums up weighted impact of each measure over area of NCU - outcome is 7 rows for each NCU
-  # -----------ADDED AREA NCU HA FOR %AREA EU---------------
-  # --------------------------------------------------------
+  # sums up weighted impact of each measure over area of NCU - outcome is one row for each measure per NCU
   # d3 <- d3[,.(ncu,crop_name,man_code,NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
   # cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
   # d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
 
   # CHANGED THESE LINES TO TEST WEIGHTED REFERENCE VALUES
-  # **this uses weighted means on the scores for the final outcome, BUT are target/reference values weighted by area anywhere?
+  # **this uses weighted means on the scores for the final outcome, BUT are target/reference values weighted by area anywhere else?
+  # The final results are changed slightly
   # --------------------------------------------------------
-  d3 <- d3[,.(ncu,crop_name,man_code, NUTS2,area_ncu,area_ncu_ha_tot,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N,yield_ref,soc_ref,n_sp_ref)] #subset
-  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref',colnames(d3))] #store col names
+  d3 <- d3[,.(ncu,crop_name,man_code,NUTS2,area_ncu,area_ncu_ha_tot,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N,yield_ref,soc_ref,n_sp_ref,density)] #subset
+  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density',colnames(d3))] #store col names
+  # apply area-weighted mean to all columns from grepl, retain columns ncu, man_code, area_tot
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code','area_ncu_ha_tot')]
 
+  # ***** Question *****
+  # Within an NCU, reference values change by crop types. Y and Nsu by all crop types. SOC and BD only different for grassland
+  # Where should area-weighted means for reference values be calculated?
+  # ********************
 
   # estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION
 
@@ -333,8 +337,14 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
                            yield_ref=yield_ref[1], #added area-weighted reference values to do final calculations
                            soc_ref=soc_ref[1],
                            n_sp_ref=n_sp_ref[1],
-                           area_ncu_ha_tot=area_ncu_ha_tot[1]),
+                           area_ncu_ha_tot=area_ncu_ha_tot[1],
+                           bd=density[1]),
                     by=.(ncu,cgid)] # each measure combo gets unique weighted impact sum; we have a bipmc value for each unique combo (cgid)
+
+    # ***** Question *****
+    # Within an NCU, reference values change by crop types. Y and Nsu by all crop types. SOC and BD only different for grassland
+    # Where should area-weighted means for reference values be calculated?
+    # ********************
 
     #up to here we have all measures--------------------------------------------
 
@@ -349,7 +359,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
     # save into a list
     # **May 2024 ADDED AREA NCU HA TOT, area-weighted reference values--------------------------
-    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs,yield_ref,soc_ref,n_sp_ref)])
+    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs,yield_ref,soc_ref,n_sp_ref,bd)])
 
     # this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
   }
@@ -392,12 +402,18 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # the case where only best measure (or best combination of measures) have been applied
   # the best ranking is chosen, whether the best is one measure or a combination
   # show the changes in indicators as well as distance to target status
+
+  # ***** Question *****
+  # Within an NCU, reference values change by crop types. Y and Nsu by all crop types. SOC and BD only different for grassland
+  # Where should area-weighted means for reference values be calculated?
+  # ********************
   if(sum(grepl('best_impact|all',output))>0){
 
     # select relevant data and sort
     # BIPMCS MUST BE CHANGED TO 1 for best measure and 11 for worst measure
     # **May 2024 weighted reference values and total ha per ncu
-    pout2 <- dt.out[bipmcs==1,.(ncu,area_ncu_ha_tot,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref)]
+    pout2 <- dt.out[bipmcs==1,.(ncu,area_ncu_ha_tot,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,
+                                ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
@@ -423,7 +439,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # select relevant data and sort
     #SELECT NO. OF MEASURES 2; SELECT COLUMNS; OVERWRITE COLUMN BIPMCS (ORDER OF ALL COMBO MEASURES)
     #SO MAKING A SUBSET OF THIS BASED ON A CRITERIA; THEN RECALCULATE THE ORDER BASED ON "MISSING RANK VALUES"
-    pout4 <- dt.out[man_n == 2,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    # **May 2024 weighted reference values and total ha per ncu
+    pout4 <- dt.out[man_n == 2,.(ncu,area_ncu_ha_tot,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N,
+                                 ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd)][,bipmcs := frankv(bipmcs),by=ncu]
     pout4 = pout4[bipmcs==1]
     # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
 #<<<<<<< HEAD
@@ -448,7 +466,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # selects the output where nmax is 3, ranks by bipmcs metric, selects #1
   if(sum(grepl('score_trio|all',output))>0 & nmax >= 3){
 
-    pout5 <- dt.out[man_n == 3,.(ncu,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N)][,bipmcs := frankv(bipmcs),by=ncu]
+    # **May 2024 weighted reference values and total ha per ncu
+    pout5 <- dt.out[man_n == 3,.(ncu,area_ncu_ha_tot,man_code,bipmcs,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,tm_Y,tm_C,tm_N,
+                                 ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd)][,bipmcs := frankv(bipmcs),by=ncu]
     pout5 = pout5[bipmcs==1]
 
      # change into table format (with the number varying from 1 (the best) to 7 (the lowest impact))
