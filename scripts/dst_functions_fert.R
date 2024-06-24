@@ -143,12 +143,16 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # ***************************************************
   # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
-  # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
-  # d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
+  # this calculation includes the change due to a measure, so scoring based on effects of each practice
+  # if the target is already reached, the distance is zero and priority is not placed on that indicator
+  # if target is not reached, the score (distance) increases with exceeded-limits (or under-target)
+  # min of 0 and max of 1 = if score negative it becomes 0; if score >1 it becomes 1
   # adding some weight to the scores even when targets met
   d3[, sY := pmax(0.1,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
   d3[, sSOC := pmax(0.1,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
-  d3[, sNsu := pmax(0.1,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
+  # d3[, sNsu := pmax(0.1,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
+  # change sNsu to:
+  d3[, sNsu := pmin(1.0,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
 
   # there are cases where the critical N surplus is missing.
   # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
@@ -296,11 +300,13 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # HERE NEGATIVE VALUES (Nsu) GET REPLACED WITH VERY SMALL NUMBERS
     # removed pmax(x,1e-3)
 
-    # add a relative score for the impact of each measure, sorted on their impact on the indicator (highest impact = lowest rank)
-    # rank 1 to x by ncu and cgid (all measure combo)
-    # sum up 3 cols which are rank of absolute measure; this shows order of magnitude for each impact Y/C/N
+    # add a relative score for the impact of each measure based on meta-models only
+    # sorted on their impact on the indicator (highest impact = lowest rank)
+    # rank 1 to x by ncu and cgid (all measure combos)
+    # rank of absolute effects of measures; this shows order of magnitude for each impact Y/C/N
     # "identical impacts" get the same score
     dt.ss[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by=.(ncu,cgid)]
+    # RANK BY CHANGES FROM MEASURES
 
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
@@ -308,6 +314,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # add order per NCU and per measure combination (cgid), so that most impactful measure has rank 1
     # exact same as odY, BUT it does not use absolute value but also includes the negative impacts
     dt.ss[, c('fY','fSOC','fNsu') := lapply(.SD,function(x) frankv(x,order=-1)),.SDcols = c('sY','sSOC','sNsu'),by=.(ncu,cgid)]
+    # RANK BY DISTANCE TO TARGETS (SCORING)
 
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
@@ -316,7 +323,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # highest score counts 100, second 50, third 33, etc
     # estimate the change in indicators due to the measures taken, and estimate the change in the integral score for three indicators together
     # bipmc = weighted avg impact of the 3 indicators of the combo of measures applied
-    # divide dist to target by the rank; biggest change in direction of target counts for 100/50/etc.; fNsu keeps negative impacts and
+    # divide dist to target by the rank (WHY???); biggest change in direction of target counts for 100/50/etc.; fNsu keeps negative impacts and
     # calculates correct direction of magnitude
     # change in target to yield + change in target SOC + change N
     # each "change" is altered by user weight (the score is literally multiplied by 2 for that weight, etc.)

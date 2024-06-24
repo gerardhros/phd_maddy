@@ -102,13 +102,13 @@ ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
 
 
 #=====================================================================================
-# June 2024: Current DST simulation for impact_best, score_duo, score_trio
+# June 2024: Current DST simulation for best_impact ($impact_best), score_duo, score_trio
 #=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'score_trio',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=3)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
 
 # store output
-out.best <- sim.all$score_trio
+out.best <- sim.all$impact_best
 
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
@@ -194,6 +194,7 @@ out.best <- sim.all$score_trio
                              Y_diff_tons = signif(mean_D_Y/1000,3), Cs_diff_tons = signif(mean_D_Cs/1000,3), N_diff_kg = signif(mean_D_N,3))
   totals_table
   # various outputs for target metrics saved depending on measures included
+  fwrite(totals_table,paste0(floc,'totals_table-all.csv')) # scoring updated Nsu
   fwrite(totals_table,paste0(floc,'totals_table-all-10.csv')) #all measures in model
   fwrite(totals_table,paste0(floc,'totals_table_fert.csv')) #all measures in model
   fwrite(totals_table,paste0(floc,'totals_table_eff.csv')) #all measures in model
@@ -242,6 +243,7 @@ out.best <- sim.all$score_trio
 target_metrics <- data.frame(Y_fin_area*100, Y_final*100, tf_Ya_tot/100, C_fin_area*100, C_final*100, tf_Ca_tot/100, N_fin_area*100, N_final*100, tf_Na_tot/100)
 target_metrics
 # various outputs for target metrics saved depending on measures included
+fwrite(target_metrics,paste0(floc,'target_metrics_all.csv')) #all measures in model; updated scoring equation for Nsu
 fwrite(target_metrics,paste0(floc,'target_metrics_all-11.csv')) #all measures in model
 fwrite(target_metrics,paste0(floc,'target_metrics_all-10.csv')) #RFR removed
 fwrite(target_metrics,paste0(floc,'target_metrics_fert-4.csv'))   #nutrient type only
@@ -260,6 +262,7 @@ fwrite(target_metrics,paste0(floc,'target_metrics_all_uY10.csv')) #test of u=10,
 
 freq_meas <- data.frame(table(out.best$man_code))
 freq_meas
+fwrite(freq_meas,paste0(floc,'freq_meas_all.csv')) #updated scoring Nsu
 fwrite(freq_meas,paste0(floc,'freq_meas_all-11.csv'))
 fwrite(freq_meas,paste0(floc,'freq_meas_all-10.csv'))
 fwrite(freq_meas,paste0(floc,'freq_meas_fert-4.csv'))
