@@ -59,12 +59,8 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # assume that the potential corresponds to the proportion of NT/RT already applied (in NUTS2 zone)
   d2[,fr_rtnt := pmin(1,sum(parea.rtct,na.rm = T) / sum( parea.ntct,na.rm=T)), by = ncu]
   d2[is.na(fr_rtnt), fr_rtnt := 0]
-  # if RT is more than NT, the fraction is 1
 
-  # -----------ADDED AREA NCU HA FOR %AREA EU---------------
-  # --------------------------------------------------------
   # subset only the columns needed to estimate the DISTANCE TO TARGET for Yield, SOC and N surplus
-  # ****May 2024 - added area_ncu_ha to calculate areal totals
   d2 <- d2[,.(ncu,crop_name,NUTS2,area_ncu,area_ncu_ha,yield_ref,yield_target,density,
               soc_ref,soc_target,n_sp_ref,n_sp_sw_crit,n_sp_gw_crit,c_man_ncu,fr_rtnt)]
   d2[,area_ncu_ha_tot := sum(area_ncu_ha,na.rm = TRUE), by =.(ncu)]
@@ -75,43 +71,22 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # merge the impact of measures from the MA models with the integrator db by NCU
   d3 <- merge(d2,dtm.mean,by=c('ncu'),allow.cartesian = TRUE)
 
-
   # correct effects for overlapping treatments via area correction on NCU level
   d3[man_code == "RT-CT" ,mmean_Nsu := mmean_Nsu * (1 - fr_rtnt)]
   d3[man_code == "RT-CT" ,mmean_SOC := mmean_SOC * (1 - fr_rtnt)]
   d3[man_code == "RT-CT" ,mmean_Y := mmean_Y * (1 - fr_rtnt)]
-  #as RT increases in proportion to NT, the impact of new RT is reduced
-  #MORE RT = IMPACTS OF NEW RT ARE REDUCED BECAUSE NOT AS MUCH CAN BE APPLIED
-  #SO THE POTENTIAL FOR NEW RT IS LOWER WHEN A LOT IS ALREADY APPLIED
-  #OR IS IT THE OTHER WAY AROUND BECAUSE WE ASSUME THE SAME RATE OF ADOPTION IN NEW AREAS?
-
   d3[man_code == "NT-CT" ,mmean_Nsu := mmean_Nsu * fr_rtnt]
   d3[man_code == "NT-CT" ,mmean_SOC := mmean_SOC * fr_rtnt]
   d3[man_code == "NT-CT" ,mmean_Y := mmean_Y * fr_rtnt]
-  #MORE NT = IMPACTS OF NEW NT REDUCED BECAUSE WE ASSUME RT MORE LIKELY
-  #OVERALL IMPACTS AT THE NCU LEVEL ARE ADJUSTED ACCORDINGLY
 
   # add estimated change in indicators for a period of X years (given as argument simyear)
   # simyear is only relevant for SOC where results are cumulative
   # converts from percentage change (from the ML models) to multiplied factor for yield, SOC and N surplus
-
   d3[, dY := mmean_Y * 0.01]
   d3[, dSOC := simyear * mmean_SOC * 0.01]
   d3[, dNsu := mmean_Nsu * 0.01]
 
-  #adapted Y accumulations - 1
-  # d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
-  # d3[, dSOC := simyear * mmean_SOC * 0.01]
-  # d3[, dNsu := mmean_Nsu * 0.01]
-
-  #adapted Y and N accumulations - 2
-  # d3[, dY := (3/5)*simyear * mmean_Y * 0.01]
-  # d3[, dSOC := simyear * mmean_SOC * 0.01]
-  # d3[, dNsu := (2/5)*simyear * mmean_Nsu * 0.01]
-
-
-
-  # prevent that the change in SOC due to manure input exceeds available C (kg ha-1 * 1000/ kg soil ha-1 = g C / kg soil * 0.1 = % SOC)
+  # prevent that the change in SOC due to manure input exceeds available C (kg ha-1 * 1000/ kg soil ha-1 = g C / kg soil * 0.1 = % SOC * 0.01 = fraction change)
   # select combined and organic measures where SOC change is greater than zero
   # take the minimum between that and the max amount of C that can decompose from the available manure
   d3[grepl('^CF|^OF', man_code) & dSOC > 0, dSOC := pmin(dSOC, c_man_ncu * 1000 *.1/(100 * 100 *.25 * density))]
@@ -121,130 +96,80 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   d3[is.na(dSOC),dSOC := 0]
   d3[is.na(dNsu),dNsu := 0]
 
-  # add metric for INITIAL distance to target for inspecting maps - check LINE 113, 260 FOR COL SELECTION in outputs
+  # add metric for INITIAL distance to target for inspecting maps
   d3[, dist_Y := yield_ref / yield_target ]
   d3[, dist_C := soc_ref / soc_target ]
   d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
   d3[is.na(dist_N), dist_N := 1]
 
-  # # add metric for FINAL distance to target for inspecting maps - check LINE 113, 260 FOR COL SELECTION in outputs
-  # d3[, dist_Y_fin := ((1+dY) * yield_ref) / yield_target ]
-  # d3[, dist_C_fin := ((1+dSOC) * soc_ref) / soc_target ]
-  # d3[, dist_N_fin := ((1+dNsu) * n_sp_ref) / pmin(n_sp_sw_crit,n_sp_gw_crit)]
-  # d3[is.na(dist_N), dist_N := 1]
-
-  # estimate DISTANCE TO TARGET evaluation
-
   # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
-  # if the target is already reached, the distance is zero and emphasis/importance is not placed on that indicator
-  # d3[, sY := 1 - pmin(1,((1 + dY) * yield_ref) / yield_target)]
-  # d3[, sSOC := 1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target)]
-  # d3[, sNsu := pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1)]
-
-  # ***************************************************
-  # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
-  # this calculation includes the change due to a measure, so scoring based on effects of each practice
-  # if the target is already reached, the distance is zero and priority is not placed on that indicator
-  # if target is not reached, the score (distance) increases with exceeded-limits (or under-target)
-  # min of 0 and max of 1 = if score negative it becomes 0; if score >1 it becomes 1
-  # adding some weight to the scores even when targets met
-  d3[, sY := pmax(0.1,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
-  d3[, sSOC := pmax(0.1,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
-  # d3[, sNsu := pmax(0.1,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
-  # change sNsu to:
+  d3[, sY := pmax(0,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
+  d3[, sSOC := pmax(0,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
   d3[, sNsu := pmin(1.0,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
 
   # there are cases where the critical N surplus is missing.
   # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
   d3[is.na(sNsu), sNsu := 1]
 
-  #EASILY REPLACE WITH s=1 to check outcomes without these functions
-  #for results do not adapt the function itself
-
-
-  # HERE NSU
-  # here the "factor" is adapted per area. E.g. 50% change in C expected for half the NCU area = 25% change mapped over the whole area
-
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
-  # sums up weighted impact of each measure over area of NCU - outcome is one row for each measure per NCU
-  # d3 <- d3[,.(ncu,crop_name,man_code,NUTS2,area_ncu,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N)] #subset
-  # cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N',colnames(d3))] #store col names
-  # d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code')]
-
-  # CHANGED THESE LINES TO TEST WEIGHTED REFERENCE VALUES
-  # **this uses weighted means on the scores for the final outcome, BUT are target/reference values weighted by area anywhere else?
-  # The final results are changed slightly
-  # --------------------------------------------------------
   d3 <- d3[,.(ncu,crop_name,man_code,NUTS2,area_ncu,area_ncu_ha_tot,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N,yield_ref,soc_ref,n_sp_ref,density)] #subset
   cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density',colnames(d3))] #store col names
   # apply area-weighted mean to all columns from grepl, retain columns ncu, man_code, area_tot
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code','area_ncu_ha_tot')]
 
-  # ***** Question *****
-  # Within an NCU, reference values change by crop types. Y and Nsu by all crop types. SOC and BD only different for grassland
-  # Where should area-weighted means for reference values be calculated?
-  # ********************
-
-  # estimate IMPACT AND SCORING PER MEASURE AND MEASURE COMBINATION
-
   # create a set with all combinations of measures
 
-  # what is the list of available measures (man_code)
-  measures <- unique(d3$man_code) # 7 measures
+      # what is the list of available measures (man_code)
+      measures <- unique(d3$man_code) # 7 measures
 
-  # nmax=2
-  # what is the desired number of allowed combinations of measures
-  # when nmax=1, no combo allowed, nmax=2 means 2 measures can be applied together, etc.
-  if(is.null(nmax)){nmax = length(measures)}
+      # what is the desired number of allowed combinations of measures
+      # when nmax=1, no combo allowed, nmax=2 means 2 measures can be applied together, etc.
+      if(is.null(nmax)){nmax = length(measures)}
 
-  # make a data.table with all possible combinations of the measures
-  # when combo is 2, meas^2 = 7x7 = 49 options, etc.
-  meas.combi <- do.call(CJ,replicate(nmax,measures,FALSE))
+      # make a data.table with all possible combinations of the measures
+      # when combo is 2, meas^2 = 7x7 = 49 options, etc.
+      meas.combi <- do.call(CJ,replicate(nmax,measures,FALSE))
 
-  # add an unique ID per measure combi (including duplicates)
-  meas.combi[,cid := .I]
+      # add an unique ID per measure combi (including duplicates)
+      meas.combi[,cid := .I]
 
-  # melt the data.table to facilitate calculations per NCU per measure combi
-  meas.combi <- melt(meas.combi,id.vars ='cid',variable.name = 'measure')
+      # melt the data.table to facilitate calculations per NCU per measure combi
+      meas.combi <- melt(meas.combi,id.vars ='cid',variable.name = 'measure')
 
-  # remove duplicates
-  meas.combi <- unique(meas.combi, by = c('cid','value'))
+      # remove duplicates
+      meas.combi <- unique(meas.combi, by = c('cid','value'))
 
-  # create an exponential number to enable unique sum of individual measures
-  nfc <- 10^(1:length(measures))
+      # create an exponential number to enable unique sum of individual measures
+      nfc <- 10^(1:length(measures))
 
-  # add an unique value for each measure
-  meas.combi[,value2 := nfc[as.factor(value)]]
+      # add an unique value for each measure
+      meas.combi[,value2 := nfc[as.factor(value)]]
 
-  # sum the total values of the measures (so that each measure combination has an unique code)
-  # cid unique code for each combination
-  meas.combi[,value3 := sum(value2),by=cid]
+      # sum the total values of the measures (so that each measure combination has an unique code)
+      # cid unique code for each combination
+      meas.combi[,value3 := sum(value2),by=cid]
 
-  # add an unique ID for each unique measure combination
-  meas.combi[,cgid := .GRP,by=.(value,value3)]
+      # add an unique ID for each unique measure combination
+      meas.combi[,cgid := .GRP,by=.(value,value3)]
 
-  # remove duplicates
-  meas.combi <- unique(meas.combi,by = 'cgid')
+      # remove duplicates
+      meas.combi <- unique(meas.combi,by = 'cgid')
 
-  # update the unique ID per measurement combi
-  # gives unique combo of measures that are possible
-  meas.combi[,cgid := .GRP,by=.(value3)]
+      # update the unique ID per measurement combi
+      # gives unique combo of measures that are possible
+      meas.combi[,cgid := .GRP,by=.(value3)]
 
-  # select only the relevant columns
-  meas.combi <- meas.combi[,.(cgid,man_code = value)]
+      # select only the relevant columns
+      meas.combi <- meas.combi[,.(cgid,man_code = value)]
 
-  # make an unique table with each combination of measures per unique ID
-  dt.meas.combi <- meas.combi[,list(man_code = paste(man_code,collapse = '-'),
-                                    man_n = .N
-  ),by='cgid']
+      # make an unique table with each combination of measures per unique ID
+      dt.meas.combi <- meas.combi[,list(man_code = paste(man_code,collapse = '-'),
+                                        man_n = .N),by='cgid']
 
   # combine all measurement combinations per NCU
   dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
-  # ???? what is happening with the data melt and the V1/V2
-
 
   # CALCULATE SCORES AND MEASURE ORDER
-
   # this is done in subsets, to avoid huge RAM usage and to enhance speed
 
   # define output list to store results
@@ -254,16 +179,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   if(!quiet) {pb <- txtProgressBar(min = 0, max = 1199, style = 3);j=0}
 
   # make a sequence to split the database
-  # YOU CAN ADAPT INTO LARGER LENGTH.OUT IF NEEDED FOR COMPUTER MEMORY
-  # CHANGE "0" TO min(dt$ncu) TO TEST FOR LOOP BELOW
   ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 60)))
 
-  # predefine i=1, or 2 etc. then can run line by line. Use i=2 to run for ncu=1
-  # i=2
-  # impacts calculated in subsets to enhance speed and avoid huge RAM usage
   # for loop goes through NCUs in subsets to save memory
-  # define min/max when running separate
-
   for(i in 2:length(ncu_steps)){
 
     # select the row numbers to subset
@@ -271,94 +189,81 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     ncu_max <- ncu_steps[i]
 
     # can define min/max when running separate
-    # ncu_min = 1
-    # ncu_max = 100
     # subset the dataset from the first ncu after the previous step up to the last ncu of this step
     dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
 
-
-
-
-    cols <- c('sY','sSOC','sNsu','dY','dSOC','dNsu')
-
     # when score 0 replace value with very low number
     # so that output is not zero from all the multiplying
-    dt.ss[sY == 0, sY := 1e-4]
-    dt.ss[sNsu == 0, sNsu := 1e-4]
-    dt.ss[sSOC == 0, sSOC := 1e-4]
-    set.seed(123)
+    dt.ss[dY == 0, dY := 1e-4]
+    dt.ss[dNsu == 0, dNsu := 1e-4]
+    dt.ss[dSOC == 0, dSOC := 1e-4]
 
     # add random noise to avoid same rank for measures with similar impacts
-    # introduces 2-3% variation around value
-    # s= distance to target; d = amount of change (added on)
-    #adding noise
-    #set normal dist with mean 0 and SD .01
-    # x is cols wehre we apply function
-    # .N is all the rows; this gives us hist varying from 0.98 to 1.02 hist(1+rnorm(1000,0,0.01))
-    #sometimes all the management practices have essentially same score and need to choose "best" with some variation added
-    dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.01))),.SDcols = cols]
-    # HERE NEGATIVE VALUES (Nsu) GET REPLACED WITH VERY SMALL NUMBERS
-    # removed pmax(x,1e-3)
+    set.seed(123)
+    cols <- c('dY','dSOC','dNsu')
+    dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.001))),.SDcols = cols]
 
     # add a relative score for the impact of each measure based on meta-models only
-    # sorted on their impact on the indicator (highest impact = lowest rank)
-    # rank 1 to x by ncu and cgid (all measure combos)
     # rank of absolute effects of measures; this shows order of magnitude for each impact Y/C/N
-    # "identical impacts" get the same score
     dt.ss[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by=.(ncu,cgid)]
-    # RANK BY CHANGES FROM MEASURES
 
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
     # add order per NCU and per measure combination (cgid), so that most impactful measure has rank 1
-    # exact same as odY, BUT it does not use absolute value but also includes the negative impacts
+    # exact same as odY, BUT here it uses the total change in the distance to target rather than the relative change
     dt.ss[, c('fY','fSOC','fNsu') := lapply(.SD,function(x) frankv(x,order=-1)),.SDcols = c('sY','sSOC','sNsu'),by=.(ncu,cgid)]
-    # RANK BY DISTANCE TO TARGETS (SCORING)
 
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
-    # combined measures not additive
-    # highest score counts 100, second 50, third 33, etc
     # estimate the change in indicators due to the measures taken, and estimate the change in the integral score for three indicators together
     # bipmc = weighted avg impact of the 3 indicators of the combo of measures applied
-    # divide dist to target by the rank (WHY???); biggest change in direction of target counts for 100/50/etc.; fNsu keeps negative impacts and
-    # calculates correct direction of magnitude
-    # change in target to yield + change in target SOC + change N
-    # each "change" is altered by user weight (the score is literally multiplied by 2 for that weight, etc.)
-    # dividing by sum uw gives us relative impact of the 3
-    # e.g 1, 1, 8 = multiplied score by 1/10, 1/10, 8/10
-    # define these first 3 rows in equations in paper
-    # explain the s values definition (0 to 1)
-    # ------------**May 2024 added AREA NCU HA TOTAL, weighted reference values-----
-    dt.ss2 <- dt.ss[, list(bipmc = (sum(uw[1] * sY/fY,na.rm = T) +
-                                      sum(uw[2] * sSOC/fSOC,na.rm = T) +
-                                      sum(uw[3] * sNsu / fNsu,na.rm=T)) / sum(uw),
-                           dY = sum(dY/odY),                 #sum is there only for combined measures because must sum up each
-                           dSOC = sum(dSOC/odSOC), # divide col dY by oDY and then sum them across combined measures (dividing by a score of 1/2/3 gives 100/50/33 effect)
-                           dNsu = sum(dNsu/oNsu), # here we also want average change in yield, etc. summed per indicator for all combos per ncu - multiplying by "d" gives us right direction and summing up impacts based on ordered score O
-                           dist_Y=dist_Y[1], # these are same over one ncu so save first row d[1]
+
+    # when user weighing is included, assume that a user is talking about the absolute change rather than "the distance to target"
+    if(sum(uw) != 3){
+
+      dt.ss[,uw_yield := (uw[1]/sum(uw)) / median(sY,na.rm=T),by=.(ncu)]
+      dt.ss[,uw_soc := (uw[2]/sum(uw)) / median(sSOC,na.rm=T),by=.(ncu)]
+      dt.ss[,uw_nsu := (uw[3]/sum(uw)) / median(sNsu,na.rm=T),by=.(ncu)]
+
+    } else {
+
+      dt.ss[,uw_yield := (uw[1]/sum(uw)),by=.(ncu)]
+      dt.ss[,uw_soc := (uw[2]/sum(uw)),by=.(ncu)]
+      dt.ss[,uw_nsu := (uw[3]/sum(uw)),by=.(ncu)]
+
+    }
+
+
+    # estimate total change and the total "change" in view of distance to target, accounting for user weights
+    dt.ss2 <- dt.ss[, list(dY = sum(dY/odY),
+                           dSOC = sum(dSOC/odSOC),
+                           dNsu = sum(dNsu/oNsu),
+                           sY_combi = pmax(0,1 - pmin(1,((1 + sum(dY/odY)) * yield_ref[1]) / (yield_ref[1]/dist_Y[1]))),
+                           sSOC_combi = pmax(0,1 - pmin(1,((1 + sum(dSOC/odSOC)) * soc_ref[1]) / (soc_ref[1]/dist_C[1]))),
+                           sNsu_combi = pmin(1,pmax(0,(1 + sum(dNsu/oNsu)) * n_sp_ref[1] / (n_sp_ref[1]/dist_N[1]) - 1)),
+                           dist_Y=dist_Y[1],
                            dist_C=dist_C[1],
                            dist_N=dist_N[1],
-                           yield_ref=yield_ref[1], #added area-weighted reference values to do final calculations
+                           yield_ref=yield_ref[1],
                            soc_ref=soc_ref[1],
                            n_sp_ref=n_sp_ref[1],
                            area_ncu_ha_tot=area_ncu_ha_tot[1],
                            bd=density[1]),
-                    by=.(ncu,cgid)] # each measure combo gets unique weighted impact sum; we have a bipmc value for each unique combo (cgid)
+                    by=.(ncu,cgid)]
 
-    # ***** Question *****
-    # Within an NCU, reference values change by crop types. Y and Nsu by all crop types. SOC and BD only different for grassland
-    # Where should area-weighted means for reference values be calculated?
-    # ********************
+    # add total score of individual and combined measures, evaluated as total distance to target
+    dt.ss2[,iuw := sum(uw)]
+    dt.ss2[,bipmc := (uw[1]*sY_combi + uw[2]*sSOC_combi+uw[3]*sNsu_combi)/iuw]
 
-    #up to here we have all measures--------------------------------------------
+    # add scaling function (value - min) / (max - min)
+    mmsfun <- function(x){(x - min(x))/(max(x)-min(x))}
 
+    # add total score of individual and combined measures including user weighing
+    dt.ss2[iuw !=3, bipmc := (mmsfun(sY_combi) * uw[1] + mmsfun(sSOC_combi)* uw[2] + mmsfun(sNsu_combi)* uw[3])/iuw,by=.(ncu)]
 
     # add a ranking based on the integral score for each ncu
-    # also for all combinations
-    # bipmc is the WEIGHTED AVERAGE CHANGE total and now rank based on this value (e.g. 1 through x measures)
     dt.ss2[,bipmcs := as.integer(frankv(bipmc)),by=ncu]
 
     # add the names of measures taken back in from cgid (saves some memory)
