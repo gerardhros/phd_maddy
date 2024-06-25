@@ -11,6 +11,7 @@
 #' @param output (string) optional arguments to select different types of outputs. Options include: 'total_impact','best_impact','score_single','score_due','score_best' or 'all'.
 #' @param quiet (boolean) option to show progress bar to see progress of the function
 #' @param nmax (integer) the max number of measure combinations evaluated
+#' @param nopt (boolean) option to prefer lower number of measures above higher number when equal in score
 #'
 #' @details
 #'  run the optimizer with the following options for output:
@@ -50,7 +51,7 @@
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
 
-runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL){
+runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = TRUE,nmax = NULL,nopt = TRUE){
 
   # make local copy of the INTEGRATOR/Eurostat database
   d2 <- copy(db)
@@ -80,15 +81,12 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   d3[man_code == "NT-CT" ,mmean_Y := mmean_Y * fr_rtnt]
 
   # add estimated change in indicators for a period of X years (given as argument simyear)
-  # simyear is only relevant for SOC where results are cumulative
   # converts from percentage change (from the ML models) to multiplied factor for yield, SOC and N surplus
   d3[, dY := mmean_Y * 0.01]
   d3[, dSOC := simyear * mmean_SOC * 0.01]
   d3[, dNsu := mmean_Nsu * 0.01]
 
   # prevent that the change in SOC due to manure input exceeds available C (kg ha-1 * 1000/ kg soil ha-1 = g C / kg soil * 0.1 = % SOC * 0.01 = fraction change)
-  # select combined and organic measures where SOC change is greater than zero
-  # take the minimum between that and the max amount of C that can decompose from the available manure
   d3[grepl('^CF|^OF', man_code) & dSOC > 0, dSOC := pmin(dSOC, c_man_ncu * 1000 *.1/(100 * 100 *.25 * density))]
 
   # adaptation for missing/ NA models
@@ -102,19 +100,8 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
   d3[is.na(dist_N), dist_N := 1]
 
-  # add a score reflecting the distance to given target, being a linear function given a target value for yield, SOC and N surplus
-  d3[, sY := pmax(0,1 - pmin(1,((1 + dY) * yield_ref) / yield_target))]
-  d3[, sSOC := pmax(0,1 - pmin(1,((1 + dSOC) * soc_ref) / soc_target))]
-  d3[, sNsu := pmin(1.0,pmax(0,(1 + dNsu) * n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit) - 1))]
-
-  # there are cases where the critical N surplus is missing.
-  # so replace the distance to target for sNsu to 1 when that is the case (so, assuming that there is a max distance to target)
-  d3[is.na(sNsu), sNsu := 1]
-
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
-  d3 <- d3[,.(ncu,crop_name,man_code,NUTS2,area_ncu,area_ncu_ha_tot,dY,dSOC,dNsu,sY,sSOC,sNsu,dist_Y,dist_C,dist_N,yield_ref,soc_ref,n_sp_ref,density)] #subset
-  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density',colnames(d3))] #store col names
-  # apply area-weighted mean to all columns from grepl, retain columns ncu, man_code, area_tot
+  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density',colnames(d3))]
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code','area_ncu_ha_tot')]
 
   # create a set with all combinations of measures
@@ -170,7 +157,6 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
 
   # CALCULATE SCORES AND MEASURE ORDER
-  # this is done in subsets, to avoid huge RAM usage and to enhance speed
 
   # define output list to store results
   dt.out <- list()
@@ -192,8 +178,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # subset the dataset from the first ncu after the previous step up to the last ncu of this step
     dt.ss <- dt[ncu > ncu_min & ncu <= ncu_max]
 
-    # when score 0 replace value with very low number
-    # so that output is not zero from all the multiplying
+    # when score 0 replace value with very low number, so that output is not zero from all the multiplying
     dt.ss[dY == 0, dY := 1e-4]
     dt.ss[dNsu == 0, dNsu := 1e-4]
     dt.ss[dSOC == 0, dSOC := 1e-4]
@@ -201,7 +186,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # add random noise to avoid same rank for measures with similar impacts
     set.seed(123)
     cols <- c('dY','dSOC','dNsu')
-    dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.001))),.SDcols = cols]
+    dt.ss[, c(cols) := lapply(.SD, function(x)  x * (1 + rnorm(.N,0,0.0001))),.SDcols = cols]
 
     # add a relative score for the impact of each measure based on meta-models only
     # rank of absolute effects of measures; this shows order of magnitude for each impact Y/C/N
@@ -209,31 +194,6 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
-
-    # add order per NCU and per measure combination (cgid), so that most impactful measure has rank 1
-    # exact same as odY, BUT here it uses the total change in the distance to target rather than the relative change
-    dt.ss[, c('fY','fSOC','fNsu') := lapply(.SD,function(x) frankv(x,order=-1)),.SDcols = c('sY','sSOC','sNsu'),by=.(ncu,cgid)]
-
-    # update progress bar
-    if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
-
-    # estimate the change in indicators due to the measures taken, and estimate the change in the integral score for three indicators together
-    # bipmc = weighted avg impact of the 3 indicators of the combo of measures applied
-
-    # when user weighing is included, assume that a user is talking about the absolute change rather than "the distance to target"
-    if(sum(uw) != 3){
-
-      dt.ss[,uw_yield := (uw[1]/sum(uw)) / median(sY,na.rm=T),by=.(ncu)]
-      dt.ss[,uw_soc := (uw[2]/sum(uw)) / median(sSOC,na.rm=T),by=.(ncu)]
-      dt.ss[,uw_nsu := (uw[3]/sum(uw)) / median(sNsu,na.rm=T),by=.(ncu)]
-
-    } else {
-
-      dt.ss[,uw_yield := (uw[1]/sum(uw)),by=.(ncu)]
-      dt.ss[,uw_soc := (uw[2]/sum(uw)),by=.(ncu)]
-      dt.ss[,uw_nsu := (uw[3]/sum(uw)),by=.(ncu)]
-
-    }
 
    # score function
     scorefun <- function(v_change,v_ref,v_target,type='yield'){
@@ -270,17 +230,19 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # add total score of individual and combined measures including user weighing
     dt.ss2[iuw !=3, bipmc := (mmsfun(sY_combi) * uw[1] + mmsfun(sSOC_combi)* uw[2] + mmsfun(sNsu_combi)* uw[3])/iuw,by=.(ncu)]
 
-    # add a ranking based on the integral score for each ncu
-    dt.ss2[,bipmcs := as.integer(frankv(bipmc)),by=ncu]
-
     # add the names of measures taken back in from cgid (saves some memory)
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
 
-    # save into a list
-    # **May 2024 ADDED AREA NCU HA TOT, area-weighted reference values--------------------------
+    # add a corrections core for the number of measures
+    if(nopt == TRUE){dt.ss2[,nmcf := 0.05/man_n]} else {dt.ss2[,nmcf := 0]}
+
+    # add a ranking based on the integral score for each ncu
+    dt.ss2[,bipmcs := as.integer(frankv(bipmc+nmcf)),by=ncu]
+
+    # save into a list, this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
     dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs,yield_ref,soc_ref,n_sp_ref,bd)])
 
-    # this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
+
   }
 
 
