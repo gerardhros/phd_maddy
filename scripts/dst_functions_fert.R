@@ -235,14 +235,21 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
     }
 
+   # score function
+    scorefun <- function(v_change,v_ref,v_target,type='yield'){
+
+      if(type %in% c('yield','soc')){out <- pmin(1,pmax(0,ifelse(v_ref <= v_target,v_change * v_ref  / (v_target - v_ref),0)))}
+      if(type =='nsp'){out <- pmin(1,pmax(0,ifelse(v_ref <= v_target,0,v_change * v_ref  / (v_target - v_ref))))}
+      return(out)
+    }
 
     # estimate total change and the total "change" in view of distance to target, accounting for user weights
     dt.ss2 <- dt.ss[, list(dY = sum(dY/odY),
                            dSOC = sum(dSOC/odSOC),
                            dNsu = sum(dNsu/oNsu),
-                           sY_combi = pmax(0,1 - pmin(1,((1 + sum(dY/odY)) * yield_ref[1]) / (yield_ref[1]/dist_Y[1]))),
-                           sSOC_combi = pmax(0,1 - pmin(1,((1 + sum(dSOC/odSOC)) * soc_ref[1]) / (soc_ref[1]/dist_C[1]))),
-                           sNsu_combi = pmin(1,pmax(0,(1 + sum(dNsu/oNsu)) * n_sp_ref[1] / (n_sp_ref[1]/dist_N[1]) - 1)),
+                           sY_combi = scorefun(v_change = sum(dY/odY),v_ref = yield_ref[1],v_target = yield_ref[1]/dist_Y[1],type='yield'),
+                           sSOC_combi = scorefun(v_change = sum(dSOC/odSOC),v_ref = soc_ref[1],v_target = soc_ref[1]/dist_C[1],type='soc'),
+                           sNsu_combi = scorefun(v_change = sum(dNsu/oNsu),v_ref=n_sp_ref[1],v_target = n_sp_ref[1]/dist_N[1],type='nsp'),
                            dist_Y=dist_Y[1],
                            dist_C=dist_C[1],
                            dist_N=dist_N[1],
