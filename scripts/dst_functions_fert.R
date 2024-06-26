@@ -46,7 +46,7 @@
 # uw = c(1,1,1)
 # simyear = 5
 # quiet = FALSE
-# nmax=1
+# nmax=2
 
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
@@ -235,6 +235,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
     # add a corrections core for the number of measures
     if(nopt == TRUE){dt.ss2[,nmcf := 0.05/man_n]} else {dt.ss2[,nmcf := 0]}
+
+    # add some uncertainty on the scoring value (in particular when zero)
+    dt.ss2[, bipmc := bipmc + rnorm(.N,mean=1,sd=0.3)/1e6]
 
     # add a ranking based on the integral score for each ncu
     dt.ss2[,bipmcs := as.integer(frankv(bipmc+nmcf)),by=ncu]
