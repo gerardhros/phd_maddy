@@ -105,10 +105,10 @@ ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
 # June 2024: Current DST simulation for best_impact ($impact_best), score_duo, score_trio
 #=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
 
 # store output
-out.best <- sim.all$impact_best
+out.best <- sim.all$score_duo
 
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
@@ -194,12 +194,12 @@ out.best <- sim.all$impact_best
                              Y_diff_tons = signif(mean_D_Y/1000,3), Cs_diff_tons = signif(mean_D_Cs/1000,3), N_diff_kg = signif(mean_D_N,3))
   totals_table
   # various outputs for target metrics saved depending on measures included
-  fwrite(totals_table,paste0(floc,'totals_table-all.csv')) # scoring updated Nsu
-  fwrite(totals_table,paste0(floc,'totals_table-all-10.csv')) #all measures in model
-  fwrite(totals_table,paste0(floc,'totals_table_fert.csv')) #all measures in model
-  fwrite(totals_table,paste0(floc,'totals_table_eff.csv')) #all measures in model
-  fwrite(totals_table,paste0(floc,'totals_table_till.csv')) #all measures in model
-  fwrite(totals_table,paste0(floc,'totals_table_crop.csv')) #all measures in model
+  # fwrite(totals_table,paste0(floc,'totals_table-all.csv')) # scoring updated Nsu
+  # fwrite(totals_table,paste0(floc,'totals_table-all-10.csv')) #all measures in model
+  # fwrite(totals_table,paste0(floc,'totals_table_fert.csv')) #all measures in model
+  # fwrite(totals_table,paste0(floc,'totals_table_eff.csv')) #all measures in model
+  # fwrite(totals_table,paste0(floc,'totals_table_till.csv')) #all measures in model
+  # fwrite(totals_table,paste0(floc,'totals_table_crop.csv')) #all measures in model
   fwrite(totals_table,paste0(floc,'totals_table_duo.csv')) #all measures in model
 
 
@@ -244,20 +244,20 @@ target_metrics <- data.frame(Y_fin_area*100, Y_final*100, tf_Ya_tot/100, C_fin_a
 target_metrics
 # various outputs for target metrics saved depending on measures included
 fwrite(target_metrics,paste0(floc,'target_metrics_all.csv')) #all measures in model; updated scoring equation for Nsu
-fwrite(target_metrics,paste0(floc,'target_metrics_all-11.csv')) #all measures in model
-fwrite(target_metrics,paste0(floc,'target_metrics_all-10.csv')) #RFR removed
-fwrite(target_metrics,paste0(floc,'target_metrics_fert-4.csv'))   #nutrient type only
-fwrite(target_metrics,paste0(floc,'target_metrics_fert-3.csv')) #RFR removed
-fwrite(target_metrics,paste0(floc,'target_metrics_eff.csv'))    #nutrient efficiency only
-fwrite(target_metrics,paste0(floc,'target_metrics_till.csv'))   #tillage only
-fwrite(target_metrics,paste0(floc,'target_metrics_crop.csv'))   #crop only
-fwrite(target_metrics,paste0(floc,'target_metrics_duo.csv'))    #2 combined measures
-fwrite(target_metrics,paste0(floc,'target_metrics_duo-10.csv')) #RFR removed
-fwrite(target_metrics,paste0(floc,'target_metrics_crop.csv'))   #3 combined measures
-fwrite(target_metrics,paste0(floc,'target_metrics_all_uF.csv')) #user weight farmers
-fwrite(target_metrics,paste0(floc,'target_metrics_duo_uF.csv')) #user weight farmers
-fwrite(target_metrics,paste0(floc,'target_metrics_all_uS.csv')) #user weight multi-stakeholders
-fwrite(target_metrics,paste0(floc,'target_metrics_all_uY10.csv')) #test of u=10,1,1
+# fwrite(target_metrics,paste0(floc,'target_metrics_all-11.csv')) #all measures in model
+# fwrite(target_metrics,paste0(floc,'target_metrics_all-10.csv')) #RFR removed
+# fwrite(target_metrics,paste0(floc,'target_metrics_fert-4.csv'))   #nutrient type only
+# fwrite(target_metrics,paste0(floc,'target_metrics_fert-3.csv')) #RFR removed
+# fwrite(target_metrics,paste0(floc,'target_metrics_eff.csv'))    #nutrient efficiency only
+# fwrite(target_metrics,paste0(floc,'target_metrics_till.csv'))   #tillage only
+# fwrite(target_metrics,paste0(floc,'target_metrics_crop.csv'))   #crop only
+# fwrite(target_metrics,paste0(floc,'target_metrics_duo.csv'))    #2 combined measures
+# fwrite(target_metrics,paste0(floc,'target_metrics_duo-10.csv')) #RFR removed
+# fwrite(target_metrics,paste0(floc,'target_metrics_crop.csv'))   #3 combined measures
+# fwrite(target_metrics,paste0(floc,'target_metrics_all_uF.csv')) #user weight farmers
+# fwrite(target_metrics,paste0(floc,'target_metrics_duo_uF.csv')) #user weight farmers
+# fwrite(target_metrics,paste0(floc,'target_metrics_all_uS.csv')) #user weight multi-stakeholders
+# fwrite(target_metrics,paste0(floc,'target_metrics_all_uY10.csv')) #test of u=10,1,1
 
 
 freq_meas <- data.frame(table(out.best$man_code))
