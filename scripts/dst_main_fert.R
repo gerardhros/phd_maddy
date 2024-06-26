@@ -42,7 +42,7 @@ floc <- 'C:/dst_outputs/'
 # read in the earlier saved database from integrator
 d1 <- fread(paste0(floc,'db_final_europe.csv'))
 # replace d1 with a smaller subset of the dataset for faster testing (BE only / 1000 ncus)
-# d1 <- d1[ncu<1000]
+    d1 <- d1[ncu<1000]
 
 # reverse the names for reference and target yield because they were switched in NCU dataset
 #setnames(d1,c('yield_ref', 'yield_target'),c('yield_target','yield_ref')) #???
@@ -105,10 +105,14 @@ ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
 # June 2024: Current DST simulation for best_impact ($impact_best), score_duo, score_trio
 #=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'score_duo',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=2)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
 
 # store output
-out.best <- sim.all$score_duo
+out.best <- sim.all$impact_best
+
+#check total area
+area_d1 <- sum(d1$area_ncu_ha)
+area_sim <- sum(out.best$area_ncu_ha_tot)
 
   #frequency of best measures - make table for single rankings
   table(out.best$man_code)
@@ -202,6 +206,10 @@ out.best <- sim.all$score_duo
   # fwrite(totals_table,paste0(floc,'totals_table_crop.csv')) #all measures in model
   fwrite(totals_table,paste0(floc,'totals_table_duo.csv')) #all measures in model
 
+  # need to run again with nopt=FALSE
+  fwrite(totals_table,paste0(floc,'totals_all_1-2.csv')) #best of one or two measures allowed
+  fwrite(totals_table,paste0(floc,'totals_all_1.csv')) #best of one measure allowed #nopt=FALSE
+
 
 
   #-----------------------------------------------------------------------------
@@ -213,14 +221,20 @@ out.best <- sim.all$score_duo
 
   # sum area total initial targets met
   # yield
+  Ty_i <- sum(out.best$ti_Y)
+  Ty_f <- sum(out.best$tm_Y)
   out.best[,ti_Ya := fifelse(ti_Y == 1,area_ncu_ha_tot,0)]
   ti_Ya_tot <- sum(out.best$ti_Ya)
   Y_init_area <- ti_Ya_tot/tot_area
   # SOC
+  Tc_i <- sum(out.best$ti_C)
+  Tc_f <- sum(out.best$tm_C)
   out.best[,ti_Ca := fifelse(ti_C == 1,area_ncu_ha_tot,0)]
   ti_Ca_tot <- sum(out.best$ti_Ca)
   C_init_area <- ti_Ca_tot/tot_area
   # N surplus
+  Tn_i <- sum(out.best$ti_N)
+  Tn_f <- sum(out.best$tm_N)
   out.best[,ti_Na := fifelse(ti_N == 1,area_ncu_ha_tot,0)]
   ti_Na_tot <- sum(out.best$ti_Na)
   N_init_area <- ti_Na_tot/tot_area
@@ -240,7 +254,13 @@ out.best <- sim.all$score_duo
   N_fin_area <- tf_Na_tot/tot_area
 
 #save the metrics for targets met - final area, %area, %ncus
-target_metrics <- data.frame(Y_fin_area*100, Y_final*100, tf_Ya_tot/100, C_fin_area*100, C_final*100, tf_Ca_tot/100, N_fin_area*100, N_final*100, tf_Na_tot/100)
+target_metrics <- data.frame(tot_area/100,
+                             Y_fin_area*100, Y_final*100, tf_Ya_tot/100,
+                             C_fin_area*100, C_final*100, tf_Ca_tot/100,
+                             N_fin_area*100, N_final*100, tf_Na_tot/100,
+                             Y_init_area*100, Y_initial*100, ti_Ya_tot/100,
+                             C_init_area*100, C_initial*100, ti_Ca_tot/100,
+                             N_init_area*100, N_initial*100, ti_Na_tot/100)
 target_metrics
 # various outputs for target metrics saved depending on measures included
 fwrite(target_metrics,paste0(floc,'target_metrics_all.csv')) #all measures in model; updated scoring equation for Nsu
@@ -258,25 +278,29 @@ fwrite(target_metrics,paste0(floc,'target_metrics_all.csv')) #all measures in mo
 # fwrite(target_metrics,paste0(floc,'target_metrics_duo_uF.csv')) #user weight farmers
 # fwrite(target_metrics,paste0(floc,'target_metrics_all_uS.csv')) #user weight multi-stakeholders
 # fwrite(target_metrics,paste0(floc,'target_metrics_all_uY10.csv')) #test of u=10,1,1
+fwrite(target_metrics,paste0(floc,'targets_all_1-2.csv')) # best of one or two measures allowed
+fwrite(target_metrics,paste0(floc,'targets_all_1.csv')) # best of one or two measures allowed
 
 
 freq_meas <- data.frame(table(out.best$man_code))
 freq_meas
-fwrite(freq_meas,paste0(floc,'freq_meas_all.csv')) #updated scoring Nsu
-fwrite(freq_meas,paste0(floc,'freq_meas_all-11.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_all-10.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_fert-4.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_fert-3.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_eff.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_till.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_crop.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_duo.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_duo-10.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_trio.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_all_uF.csv'))
-fwrite(freq_meas,paste0(floc,'freq_meas_duo_uF.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_all.csv')) #updated scoring Nsu
+# fwrite(freq_meas,paste0(floc,'freq_meas_all-11.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_all-10.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_fert-4.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_fert-3.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_eff.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_till.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_crop.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_duo.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_duo-10.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_trio.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_all_uF.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_duo_uF.csv'))
+# fwrite(freq_meas,paste0(floc,'freq_meas_all_uY10.csv')) #test of u=10,1,1
 
-fwrite(freq_meas,paste0(floc,'freq_meas_all_uY10.csv')) #test of u=10,1,1
+fwrite(freq_meas,paste0(floc,'freq_all_1-2.csv')) # best of one or two measures allowed
+fwrite(freq_meas,paste0(floc,'freq_all_1.csv')) # best of one or two measures allowed
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------

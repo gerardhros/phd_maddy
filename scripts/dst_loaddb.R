@@ -55,7 +55,7 @@
   #includes current status and targets/limits for Y, C, N
   #Think of as "field types" with unique crop type/targets, N surplus/targets, N level
 
-  # setnames
+  # setnames with ****yield target and reference switched back correctly****
   setnames(d1,c('country','crop','texture','ncu','area_ncu',
                 'yield_target','yield_ref','soc_ref','soc_target','n_sp_ref','n_sp_sw_crit','n_sp_gw_crit',
                 'density','cn','clay','ph','n_fert','n_man','n_fix','n_dep','n_covercrop',
