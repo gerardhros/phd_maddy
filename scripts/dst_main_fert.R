@@ -244,7 +244,7 @@ freq_meas <- data.frame(table(out.best$man_code))
 freq_meas
 
 #-------------------------------------------------------------------------------
-# save tables
+# save output tables
 #-------------------------------------------------------------------------------
 fwrite(freq_meas,paste0(floc,'freq_all_1.csv')) # best of one or two measures allowed
 fwrite(freq_meas,paste0(floc,'freq_all_1-2.csv')) # best of one or two measures allowed
@@ -265,7 +265,7 @@ fwrite(target_metrics,paste0(floc,'targets_duo.csv')) #all measures in model; up
 fwrite(target_metrics,paste0(floc,'targets_trio.csv')) #all measures in model; updated scoring equation for Nsu
 
 
-# list of names for output tables by parameters
+# list of names previously used for output tables by parameters
 #-------------------------------------------------------------------------------
 # fwrite(target_metrics,paste0(floc,'target_metrics_all-11.csv')) #all measures in model
 # fwrite(target_metrics,paste0(floc,'target_metrics_all-10.csv')) #RFR removed
