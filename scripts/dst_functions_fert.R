@@ -153,6 +153,12 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
       dt.meas.combi <- meas.combi[,list(man_code = paste(man_code,collapse = '-'),
                                         man_n = .N),by='cgid']
 
+      # remove options that can not be applied together
+      dt.meas.combi <- dt.meas.combi[!grepl('RT-CT-NT-CT|NT-CT-RT-CT',man_code)]
+      dt.meas.combi <- dt.meas.combi[!grepl('OF-MF-CF-MF|CF-MF-OF-MF',man_code)]
+      dt.meas.combi <- dt.meas.combi[!grepl('EE-OF-MF|OF-MF-EE',man_code)]
+      dt.meas.combi[,cgid := 1:.N]
+
   # combine all measurement combinations per NCU
   dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
 
