@@ -158,10 +158,11 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
       dt.meas.combi <- dt.meas.combi[!grepl('RT-CT-NT-CT|NT-CT-RT-CT',man_code)]
       dt.meas.combi <- dt.meas.combi[!grepl('OF-MF-CF-MF|CF-MF-OF-MF',man_code)]
       dt.meas.combi <- dt.meas.combi[!grepl('EE-OF-MF|OF-MF-EE',man_code)]
-      dt.meas.combi[,cgid := 1:.N]
+
 
   # combine all measurement combinations per NCU
   dt <- merge.data.table(d3,meas.combi,by='man_code', all= TRUE,allow.cartesian = TRUE)
+
 
   # CALCULATE SCORES AND MEASURE ORDER
 
@@ -238,7 +239,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     dt.ss2[iuw !=3, bipmc := (mmsfun(sY_combi) * uw[1] + mmsfun(sSOC_combi)* uw[2] + mmsfun(sNsu_combi)* uw[3])/iuw,by=.(ncu)]
 
     # add the names of measures taken back in from cgid (saves some memory)
-    dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid')
+    dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid',all.x = TRUE)
+
+    # remove combinations of measues that are not allowed
+    dt.ss2 <- dt.ss2[!is.na(man_code)]
 
     # add a corrections core for the number of measures
     if(nopt == TRUE){dt.ss2[,nmcf := 0.05/man_n]} else {dt.ss2[,nmcf := 0]}
