@@ -46,7 +46,7 @@
 # uw = c(1,1,1)
 # simyear = 5
 # quiet = FALSE
-# nmax=2
+# nmax=1
 
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
@@ -101,6 +101,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   d3[is.na(dist_N), dist_N := 1]
 
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
+  # the outcome is a weighted mean based on sub-ncu crop areas for all parameters below
   cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density',colnames(d3))]
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code','area_ncu_ha_tot')]
 
