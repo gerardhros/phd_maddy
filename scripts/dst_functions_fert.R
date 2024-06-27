@@ -238,10 +238,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     if(nopt == TRUE){dt.ss2[,nmcf := 0.05/man_n]} else {dt.ss2[,nmcf := 0]}
 
     # add some uncertainty on the scoring value (in particular when zero)
-    dt.ss2[, bipmc := bipmc + rnorm(.N,mean=1,sd=0.3)/1e6]
+    dt.ss2[, bipmc := bipmc + sample(1:.N,.N)/1e10,by=ncu]
 
     # add a ranking based on the integral score for each ncu
-    dt.ss2[,bipmcs := as.integer(frankv(bipmc+nmcf)),by=ncu]
+    dt.ss2[,bipmcs := as.integer(frankv(bipmc+nmcf,order = -1)),by=ncu]
 
     # save into a list, this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
     dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs,yield_ref,soc_ref,n_sp_ref,bd)])
