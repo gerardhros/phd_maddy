@@ -39,32 +39,32 @@ r1.p <- as.data.table(r1.p)
 # IMPACT_BEST map for QGIS inspection
 #===============================================================================
 
-r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
-
-# make man codes numeric
-### try later ###
-# # better is to replace this part of code by r.ncu[, man_num := as.numeric(as.factor(man_code))]
-r.ncu[man_code == 'CF-MF' , man_num := 1]
-r.ncu[man_code == 'OF-MF' , man_num := 2]
-r.ncu[man_code == 'EE' , man_num := 3]
-r.ncu[man_code == 'RFR' , man_num := 4]
-r.ncu[man_code == 'RFT' , man_num := 5]
-r.ncu[man_code == 'RFP' , man_num := 6]
-r.ncu[man_code == 'RT-CT' , man_num := 7]
-r.ncu[man_code == 'NT-CT' , man_num := 8]
-r.ncu[man_code == 'ROT' , man_num := 9]
-r.ncu[man_code == 'CC' , man_num := 10]
-r.ncu[man_code == 'RES' , man_num := 11]
-
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num'))
-
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz',)
-terra::crs(r.fin) <- 'epsg:3035' #old line now repaced by 3035. change to 3035 if needed
-# write as output
-terra::writeRaster(r.fin,'products/out.best.eff.tif', overwrite = TRUE)
-
+# r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
+#
+# # make man codes numeric
+# ### try later ###
+# # # better is to replace this part of code by r.ncu[, man_num := as.numeric(as.factor(man_code))]
+# r.ncu[man_code == 'CF-MF' , man_num := 1]
+# r.ncu[man_code == 'OF-MF' , man_num := 2]
+# r.ncu[man_code == 'EE' , man_num := 3]
+# r.ncu[man_code == 'RFR' , man_num := 4]
+# r.ncu[man_code == 'RFT' , man_num := 5]
+# r.ncu[man_code == 'RFP' , man_num := 6]
+# r.ncu[man_code == 'RT-CT' , man_num := 7]
+# r.ncu[man_code == 'NT-CT' , man_num := 8]
+# r.ncu[man_code == 'ROT' , man_num := 9]
+# r.ncu[man_code == 'CC' , man_num := 10]
+# r.ncu[man_code == 'RES' , man_num := 11]
+#
+# # set columns in right order for conversion to raster
+# setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_num'))
+#
+# # convert to spatial raster
+# r.fin <- terra::rast(r.ncu,type='xyz',)
+# terra::crs(r.fin) <- 'epsg:3035' #old line now repaced by 3035. change to 3035 if needed
+# # write as output
+# terra::writeRaster(r.fin,'products/out.best.eff.tif', overwrite = TRUE)
+#
 
 
 
@@ -75,51 +75,51 @@ terra::writeRaster(r.fin,'products/out.best.eff.tif', overwrite = TRUE)
 # link raster to different output sets
 #===============================================================================
 
-r.ncu <- merge(r1.p, dt.meas, by.x = 'gncu2010_ext', by.y = 'ncu')
-# set columns in right order for conversion to raster
-#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_w','yield_targ_w','perc_Yt'))
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
-
-
-r.ncu <- merge(r1.p, d1.targ, by.x = 'gncu2010_ext', by.y = 'ncu')
-# set columns in right order for conversion to raster
-#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','soc_target','n_sp_crit','n_sp_sw_crit','n_sp_gw_crit'))
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
-
-
-r.ncu <- merge(r1.p, dt.RFP, by.x = 'gncu2010_ext', by.y = 'ncu')
-# set columns in right order for conversion to raster
-#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
-
-r.ncu <- merge(r1.p, dt.RFP, by.x = 'gncu2010_ext', by.y = 'ncu')
-# set columns in right order for conversion to raster
-#setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
-# set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
-# convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
-# write as output
-#terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
+# r.ncu <- merge(r1.p, dt.meas, by.x = 'gncu2010_ext', by.y = 'ncu')
+# # set columns in right order for conversion to raster
+# #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# # set columns in right order for conversion to raster
+# setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_w','yield_targ_w','perc_Yt'))
+# # convert to spatial raster
+# r.fin <- terra::rast(r.ncu,type='xyz')
+# terra::crs(r.fin) <- 'epsg:4326'
+# # write as output
+# #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
+#
+#
+# r.ncu <- merge(r1.p, d1.targ, by.x = 'gncu2010_ext', by.y = 'ncu')
+# # set columns in right order for conversion to raster
+# #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# # set columns in right order for conversion to raster
+# setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','soc_target','n_sp_crit','n_sp_sw_crit','n_sp_gw_crit'))
+# # convert to spatial raster
+# r.fin <- terra::rast(r.ncu,type='xyz')
+# terra::crs(r.fin) <- 'epsg:4326'
+# # write as output
+# #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
+#
+#
+# r.ncu <- merge(r1.p, dt.RFP, by.x = 'gncu2010_ext', by.y = 'ncu')
+# # set columns in right order for conversion to raster
+# #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# # set columns in right order for conversion to raster
+# setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
+# # convert to spatial raster
+# r.fin <- terra::rast(r.ncu,type='xyz')
+# terra::crs(r.fin) <- 'epsg:4326'
+# # write as output
+# #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
+#
+# r.ncu <- merge(r1.p, dt.RFP, by.x = 'gncu2010_ext', by.y = 'ncu')
+# # set columns in right order for conversion to raster
+# #setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','dist_Y.x','dist_C.x','dist_N.x','dist_Y_fin','dist_C_fin','dist_N_fin'))
+# # set columns in right order for conversion to raster
+# setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code','dY','dSOC','dNsu','tm_Y','tm_C','tm_N'))
+# # convert to spatial raster
+# r.fin <- terra::rast(r.ncu,type='xyz')
+# terra::crs(r.fin) <- 'epsg:4326'
+# # write as output
+# #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
 
 #===============================================================================
@@ -219,17 +219,17 @@ visualize_cont <- function(raster, layer, name, breaks, labels, ftitle){
 r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
 
 # make man codes numeric
-r.ncu[man_code == 'CF-MF' , man_num := 1]
-r.ncu[man_code == 'OF-MF' , man_num := 2]
-r.ncu[man_code == 'EE' , man_num := 3]
-r.ncu[man_code == 'RFR' , man_num := 4]
-r.ncu[man_code == 'RFT' , man_num := 5]
-r.ncu[man_code == 'RFP' , man_num := 6]
-r.ncu[man_code == 'RT-CT' , man_num := 7]
-r.ncu[man_code == 'NT-CT' , man_num := 8]
-r.ncu[man_code == 'ROT' , man_num := 9]
-r.ncu[man_code == 'CC' , man_num := 10]
-r.ncu[man_code == 'RES' , man_num := 11]
+# r.ncu[man_code == 'CF-MF' , man_num := 1]
+# r.ncu[man_code == 'OF-MF' , man_num := 2]
+# r.ncu[man_code == 'EE' , man_num := 3]
+# r.ncu[man_code == 'RFR' , man_num := 4]
+# r.ncu[man_code == 'RFT' , man_num := 5]
+# r.ncu[man_code == 'RFP' , man_num := 6]
+# r.ncu[man_code == 'RT-CT' , man_num := 7]
+# r.ncu[man_code == 'NT-CT' , man_num := 8]
+# r.ncu[man_code == 'ROT' , man_num := 9]
+# r.ncu[man_code == 'CC' , man_num := 10]
+# r.ncu[man_code == 'RES' , man_num := 11]
 
 # with RFR removed
 r.ncu[man_code == 'CF-MF' , man_num := 1]
@@ -252,12 +252,12 @@ r.fin <- terra::rast(r.ncu,type='xyz')
 terra::crs(r.fin) <- 'epsg:3035'
 
 # write as output for qgis
-terra::writeRaster(r.fin,'products/out.best.all.tif', overwrite = TRUE)
-terra::writeRaster(r.fin,'products/out.best.fert1.tif', overwrite = TRUE)
-terra::writeRaster(r.fin,'products/out.best.eff1.tif', overwrite = TRUE)
-terra::writeRaster(r.fin,'products/out.best.till1.tif', overwrite = TRUE)
-terra::writeRaster(r.fin,'products/out.best.crop1.tif', overwrite = TRUE)
-terra::writeRaster(r.fin,'products/out.best.all-10.tif', overwrite = TRUE)
+# terra::writeRaster(r.fin,'products/out.best.all.tif', overwrite = TRUE) #RFR removed = 10 measures
+# terra::writeRaster(r.fin,'products/out.best.fert1.tif', overwrite = TRUE)
+# terra::writeRaster(r.fin,'products/out.best.eff1.tif', overwrite = TRUE)
+# terra::writeRaster(r.fin,'products/out.best.till1.tif', overwrite = TRUE)
+# terra::writeRaster(r.fin,'products/out.best.crop1.tif', overwrite = TRUE)
+# terra::writeRaster(r.fin,'products/out.best.all-10.tif', overwrite = TRUE)
 
 
 
@@ -274,7 +274,7 @@ p1 <- visualize_discrete(raster = r.fin,
                                     'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
                          name = "Measures",
                          ftitle = 'Best measures')
-ggsave(filename = "products/out_best_all-10.png",
+ggsave(filename = "products/out_best_all_new.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #------------------------------------------------------------------------------------------
@@ -287,7 +287,7 @@ p1 <- visualize_discrete(raster = r.fin,
                          labels = c('CF-MF','OF-MF'),
                          name = "Measures",
                          ftitle = 'Best nutrient type')
-ggsave(filename = "products/out_best_fert1.png",
+ggsave(filename = "products/out_best_fert_new.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #------------------------------------------------------------------------------------------
@@ -311,7 +311,7 @@ p1 <- visualize_discrete(raster = r.fin,
                                     'RFT','RFP'),
                          name = "Measures",
                          ftitle = 'Best nutrient efficiency measure')
-ggsave(filename = "products/out_best_eff-3.png",
+ggsave(filename = "products/out_best_eff_new.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #------------------------------------------------------------------------------------------
@@ -319,11 +319,11 @@ ggsave(filename = "products/out_best_eff-3.png",
 # -----------------------------------------------------------------------------------------
 p1 <- visualize_discrete(raster = r.fin,
                          layer = 'man_num',
-                         breaks = c(6.5,7.5,8.5),
+                         breaks = c(5.5,6.5,7.5),
                          labels = c('RT-CT','NT-CT'),
                          name = "Measures",
                          ftitle = 'Best tillage measure')
-ggsave(filename = "products/out_best_till1.png",
+ggsave(filename = "products/out_best_till_new.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #------------------------------------------------------------------------------------------
@@ -331,11 +331,11 @@ ggsave(filename = "products/out_best_till1.png",
 # -----------------------------------------------------------------------------------------
 p1 <- visualize_discrete(raster = r.fin,
                          layer = 'man_num',
-                         breaks = c(8.5,9.5,10.5,11.5),
+                         breaks = c(7.5,8.5,9.5,10.5),
                          labels = c('ROT','CC','RES'),
                          name = "Measures",
                          ftitle = 'Best cropping measure')
-ggsave(filename = "products/out_best_crop1.png",
+ggsave(filename = "products/out_best_crop_new.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 

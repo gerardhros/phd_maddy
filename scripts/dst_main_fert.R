@@ -63,6 +63,10 @@ dt.m8 <- cIMAm(management='NT-CT',db = d1, mam = ma_models,covar = TRUE)
 dt.m9 <- cIMAm(management='RES',db = d1, mam = ma_models, covar = TRUE)
 dt.m10 <- cIMAm(management='ROT',db = d1, mam = ma_models, covar = TRUE)
 dt.m11 <- cIMAm(management='RT-CT',db = d1, mam = ma_models, covar = TRUE)
+#
+# # # # Use standard all-10 remove RFR------------------------------------------------
+dt.m <- rbind(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
+rm(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 
 # Combine various combinations or remove measures-------------------------------
 
@@ -72,27 +76,32 @@ dt.m11 <- cIMAm(management='RT-CT',db = d1, mam = ma_models, covar = TRUE)
 # rm(dt.m1,dt.m2,dt.m3,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 
 #nutrient type only-----------------------
-# dt.m <- rbind(dt.m5,dt.m6)
-# rm(dt.m5,dt.m6)
+ # dt.m5 <- cIMAm(management='CF-MF',db = d1, mam = ma_models, covar = TRUE)
+ # dt.m6 <- cIMAm(management='OF-MF',db = d1, mam = ma_models, covar = TRUE)
+ # dt.m <- rbind(dt.m5,dt.m6)
+ # rm(dt.m5,dt.m6)
+
 # #nutrient efficiency only *** with RFR***
 # dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4)
 # rm(dt.m1,dt.m2,dt.m3,dt.m4)
 # #nutrient efficiency only---------------
-# dt.m <- rbind(dt.m1,dt.m2,dt.m4)
-# rm(dt.m1,dt.m2,dt.m4)
+ # dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models, covar = FALSE)
+ # dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models, covar = FALSE)
+ # dt.m4 <- cIMAm(management='RFT',db = d1, mam = ma_models, covar = FALSE)
+ # dt.m <- rbind(dt.m1,dt.m2,dt.m4)
+ # rm(dt.m1,dt.m2,dt.m4)
 # #tillage only---------------------------
-# dt.m <- rbind(dt.m8,dt.m11)
-# rm(dt.m8,dt.m11)
+ # dt.m8 <- cIMAm(management='NT-CT',db = d1, mam = ma_models,covar = TRUE)
+ # dt.m11 <- cIMAm(management='RT-CT',db = d1, mam = ma_models, covar = TRUE)
+ # dt.m <- rbind(dt.m8,dt.m11)
+ # rm(dt.m8,dt.m11)
 # #cropping only--------------------------
+# dt.m7 <- cIMAm(management='CC',db = d1, mam = ma_models, covar = TRUE)
+# dt.m9 <- cIMAm(management='RES',db = d1, mam = ma_models, covar = TRUE)
+# dt.m10 <- cIMAm(management='ROT',db = d1, mam = ma_models, covar = TRUE)
 # dt.m <- rbind(dt.m7,dt.m9,dt.m10)
 # rm(dt.m7,dt.m9,dt.m10)
-#--------------------------
-
-
-
-# # Use standard all-10 remove RFR------------------------------------------------
-dt.m <- rbind(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
-rm(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
+# #--------------------------
 
 # save meta-model tables in csv in outputs
 ma.models <- data.frame(ma_models$ma_mean,ma_models$ma_sd)
@@ -105,7 +114,7 @@ ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
 # June 2024: DST simulation for best_impact ($impact_best), score_duo, score_trio
 #=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(10,1,1),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
 
 
   #-----------------------------------------------------------------------------
@@ -143,7 +152,7 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),sim
   #calculate total ncu land area
   tot_area <- sum(out.best$area_ncu_ha_tot)
 
-  # sum area total initial targets met
+  # sum area total initial targets met------------------------------------------
   # yield
   out.best[,ti_Ya := fifelse(ti_Y == 1,area_ncu_ha_tot,0)]
   ti_Ya_tot <- sum(out.best$ti_Ya)
@@ -159,7 +168,7 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),sim
   ti_Na_tot <- sum(out.best$ti_Na)
   N_init_area <- ti_Na_tot/tot_area
 
-  # final area targets met
+  # sum area total final targets met--------------------------------------------
   # yield
   out.best[,tf_Ya := fifelse(tm_Y == 1,area_ncu_ha_tot,0)]
   tf_Ya_tot <- sum(out.best$tf_Ya)
@@ -242,28 +251,112 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),sim
 
 freq_meas <- data.frame(table(out.best$man_code))
 freq_meas
+#-------------------------------------------------------------------------------
+
+
 
 #-------------------------------------------------------------------------------
 # save output tables
 #-------------------------------------------------------------------------------
-fwrite(freq_meas,paste0(floc,'freq_all_1.csv')) # best of one or two measures allowed
-fwrite(freq_meas,paste0(floc,'freq_all_1-2.csv')) # best of one or two measures allowed
-fwrite(freq_meas,paste0(floc,'freq_duo.csv')) # best of one or two measures allowed
-fwrite(freq_meas,paste0(floc,'freq_trio.csv')) # best of one or two measures allowed
+
+fwrite(freq_meas,paste0(floc,'freq_u(211).csv')) #farmer weights (yield important)
+fwrite(freq_meas,paste0(floc,'freq_u(121).csv')) #soc
+fwrite(freq_meas,paste0(floc,'freq_u(112).csv')) #n surplus
+fwrite(freq_meas,paste0(floc,'freq_u(100).csv')) #yield only
+fwrite(freq_meas,paste0(floc,'freq_u(010).csv')) #soc only
+fwrite(freq_meas,paste0(floc,'freq_u(001).csv')) #n surplus only
+fwrite(freq_meas,paste0(floc,'freq_u(433).csv')) #multi-stakeholder weights (yield important)
+fwrite(freq_meas,paste0(floc,'freq_u(211)_n2.csv')) #farmer weights with 2 measures
+fwrite(freq_meas,paste0(floc,'freq_u(211)_n3.csv')) #farmer weights with 3 measures w/combi restriction
+fwrite(freq_meas,paste0(floc,'freq_u(111)_n3.csv')) #1-2-3 meas w/combi restriction (NT/CT, CF/OF, EE/OF)
+fwrite(freq_meas,paste0(floc,'freq_u(111)_n3_nP.csv')) #with preference to lower #measures
+fwrite(freq_meas,paste0(floc,'freq_u(433)_n2.csv')) #multi-stakeholder 2 measures
+fwrite(freq_meas,paste0(floc,'freq_u(433)_n3.csv')) #multi-stakeholder 3 measures
+fwrite(freq_meas,paste0(floc,'freq_fert.csv')) #fertilizer type only
+fwrite(freq_meas,paste0(floc,'freq_eff.csv')) #nutrient efficiency only
+fwrite(freq_meas,paste0(floc,'freq_till.csv')) #tillage only
+fwrite(freq_meas,paste0(floc,'freq_crop.csv')) #cropping only
+fwrite(freq_meas,paste0(floc,'freq_all_n1.csv')) #update best one measure allowed
+fwrite(freq_meas,paste0(floc,'freq_all_n2.csv')) #update best two measures allowed
+fwrite(freq_meas,paste0(floc,'freq_u(y10).csv')) #very high yield priority
 
 
+#-------------------------------------------------------------------------------
+# fwrite(freq_meas,paste0(floc,'freq_all_1.csv')) #best one measure allowed
+# fwrite(freq_meas,paste0(floc,'freq_all_1-2.csv')) #best of one or two measures
+# fwrite(freq_meas,paste0(floc,'freq_all_1-2-3.csv')) #best of one, two, or three
+# fwrite(freq_meas,paste0(floc,'freq_1-2_npref.csv')) #1 or 2, pref to fewer meas
+# fwrite(freq_meas,paste0(floc,'freq_1-2-3_npref.csv')) #1, 2 or 3, pref to fewer meas
+# fwrite(freq_meas,paste0(floc,'freq_duo.csv')) # best two combo measures
+# fwrite(freq_meas,paste0(floc,'freq_trio.csv')) # best three combo measures
+#-------------------------------------------------------------------------------
+
+
+fwrite(totals_table,paste0(floc,'totals_u(211).csv')) #farmer weights (yield important)
+fwrite(totals_table,paste0(floc,'totals_u(121).csv')) #soc
+fwrite(totals_table,paste0(floc,'totals_u(112).csv')) #n surplus
+fwrite(totals_table,paste0(floc,'totals_u(100).csv')) #yield only
+fwrite(totals_table,paste0(floc,'totals_u(010).csv')) #soc only
+fwrite(totals_table,paste0(floc,'totals_u(001).csv')) #n surplus only
+fwrite(totals_table,paste0(floc,'totals_u(433).csv')) #multi-stakeholder weights (yield important)
+fwrite(totals_table,paste0(floc,'totals_u(211)_n2.csv')) #farmer weights with 2 measures
+fwrite(totals_table,paste0(floc,'totals_u(211)_n3.csv')) #farmer weights with 3 measures w/combi restriction
+fwrite(totals_table,paste0(floc,'totals_u(111)_n3.csv')) #1-2-3 meas w/combi restriction (NT/CT, CF/OF, EE/OF)
+fwrite(totals_table,paste0(floc,'totals_u(111)_n3_nP.csv')) #with preference to lower #measures
+fwrite(totals_table,paste0(floc,'totals_u(433)_n2.csv')) #multi-stakeholder 2 measures
+fwrite(totals_table,paste0(floc,'totals_u(433)_n3.csv')) #multi-stakeholder 3 measures
+fwrite(totals_table,paste0(floc,'totals_fert.csv')) #fertilizer type only
+fwrite(totals_table,paste0(floc,'totals_eff.csv')) #nutrient efficiency only
+fwrite(totals_table,paste0(floc,'totals_till.csv')) #tillage only
+fwrite(totals_table,paste0(floc,'totals_crop.csv')) #cropping only
+fwrite(totals_table,paste0(floc,'totals_all_n1.csv')) #best one measure allowed
+fwrite(totals_table,paste0(floc,'totals_u(y10).csv')) #very high yield priority
+
+
+#-------------------------------------------------------------------------------
 # need to run again with nopt=FALSE
-fwrite(totals_table,paste0(floc,'totals_all_1.csv')) #best of one measure allowed #nopt=FALSE
-fwrite(totals_table,paste0(floc,'totals_all_1-2.csv')) #best of one or two measures allowed
-fwrite(totals_table,paste0(floc,'totals_duo.csv')) #all measures in model
-fwrite(totals_table,paste0(floc,'totals_trio.csv')) #all measures in model
+# fwrite(totals_table,paste0(floc,'totals_all_1.csv')) #best of one measure allowed
+# fwrite(totals_table,paste0(floc,'totals_all_1-2.csv')) #best of one or two measures
+# fwrite(totals_table,paste0(floc,'totals_all_1-2-3.csv')) #best of one, two, or three
+# fwrite(totals_table,paste0(floc,'totals_1-2_npref.csv')) #1 or 2, pref to fewer meas
+# fwrite(totals_table,paste0(floc,'totals_1-2-3_npref.csv')) #1, 2 or 3, pref to fewer meas
+# fwrite(totals_table,paste0(floc,'totals_duo.csv')) #all measures in model
+# fwrite(totals_table,paste0(floc,'totals_trio.csv')) #all measures in model
+#-------------------------------------------------------------------------------
 
 
-fwrite(target_metrics,paste0(floc,'targets_all_1.csv')) # best of one or two measures allowed
-fwrite(target_metrics,paste0(floc,'targets_all_1-2.csv')) # best of one or two measures allowed
-fwrite(target_metrics,paste0(floc,'targets_duo.csv')) #all measures in model; updated scoring equation for Nsu
-fwrite(target_metrics,paste0(floc,'targets_trio.csv')) #all measures in model; updated scoring equation for Nsu
+fwrite(target_metrics,paste0(floc,'targets_u(211).csv')) #farmer weights (yield important)
+fwrite(target_metrics,paste0(floc,'targets_u(121).csv')) #soc
+fwrite(target_metrics,paste0(floc,'targets_u(112).csv')) #n surplus
+fwrite(target_metrics,paste0(floc,'targets_u(100).csv')) #yield only
+fwrite(target_metrics,paste0(floc,'targets_u(010).csv')) #soc only
+fwrite(target_metrics,paste0(floc,'targets_u(001).csv')) #n surplus only
+fwrite(target_metrics,paste0(floc,'targets_u(433).csv')) #n surplus only
+fwrite(target_metrics,paste0(floc,'targets_u(211)_n2.csv')) #farmer weights with 2 measures
+fwrite(target_metrics,paste0(floc,'targets_u(211)_n3.csv')) #farmer weights with 3 measures w/combi restriction
+fwrite(target_metrics,paste0(floc,'targets_u(111)_n3.csv')) #1-2-3 meas w/combi restriction (NT/CT, CF/OF, EE/OF)
+fwrite(target_metrics,paste0(floc,'targets_u(111)_n3_nP.csv')) #with preference to lower #measures
+fwrite(target_metrics,paste0(floc,'targets_u(433)_n2.csv')) #multi-stakeholder 2 measures
+fwrite(target_metrics,paste0(floc,'targets_u(433)_n3.csv')) #multi-stakeholder 3 measures
+fwrite(target_metrics,paste0(floc,'targets_fert.csv')) #fertilizer type only
+fwrite(target_metrics,paste0(floc,'targets_eff.csv')) #nutrient efficiency only
+fwrite(target_metrics,paste0(floc,'targets_till.csv')) #tillage only
+fwrite(target_metrics,paste0(floc,'targets_crop.csv')) #cropping only
+fwrite(target_metrics,paste0(floc,'targets_all_n1.csv')) #update best one measure allowed
+fwrite(target_metrics,paste0(floc,'targets_all_n2.csv')) #update best two measures allowed
+fwrite(target_metrics,paste0(floc,'targets_u(111)_n2_nP.csv')) #with preference to lower #measures
+fwrite(target_metrics,paste0(floc,'targets_u(y10).csv')) #very high yield priority
 
+
+
+#-------------------------------------------------------------------------------
+# fwrite(target_metrics,paste0(floc,'targets_all_1.csv')) # best of one or two measures allowed
+# fwrite(target_metrics,paste0(floc,'targets_all_1-2.csv')) # best of one or two measures allowed
+# fwrite(target_metrics,paste0(floc,'targets_all_1-2-3.csv')) # best of one, two, or three
+# fwrite(target_metrics,paste0(floc,'targets_1-2_npref.csv')) #1 or 2, pref to fewer meas
+# fwrite(target_metrics,paste0(floc,'targets_1-2-3_npref.csv')) #1, 2 or 3, pref to fewer meas# fwrite(target_metrics,paste0(floc,'targets_duo.csv')) #all measures in model; updated scoring equation for Nsu
+# fwrite(target_metrics,paste0(floc,'targets_trio.csv')) #all measures in model; updated scoring equation for Nsu
+#-------------------------------------------------------------------------------
 
 # list of names previously used for output tables by parameters
 #-------------------------------------------------------------------------------

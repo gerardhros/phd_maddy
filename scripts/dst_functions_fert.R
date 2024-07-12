@@ -40,13 +40,14 @@
 
 
 # # # copy here inputs to run line-by-line, then run each line within the function rather than calling it
-# db = d1[ncu==1]
+# db = d1[ncu==5]
 # dt.m = dt.m
 # output = 'best_impact'
-# uw = c(1,1,1)
+# uw = c(2,1,1)
 # simyear = 5
 # quiet = FALSE
 # nmax=1
+# nopt=FALSE
 
 
 # CHECKING results 1 NCU at a time - sim$total_impact[ncu==1830]
@@ -155,9 +156,14 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
                                         man_n = .N),by='cgid']
 
       # remove options that can not be applied together
-      dt.meas.combi <- dt.meas.combi[!grepl('RT-CT-NT-CT|NT-CT-RT-CT',man_code)]
-      dt.meas.combi <- dt.meas.combi[!grepl('OF-MF-CF-MF|CF-MF-OF-MF',man_code)]
-      dt.meas.combi <- dt.meas.combi[!grepl('EE-OF-MF|OF-MF-EE',man_code)]
+      # dt.meas.combi <- dt.meas.combi[!grepl('RT-CT-NT-CT|NT-CT-RT-CT',man_code)]
+      # dt.meas.combi <- dt.meas.combi[!grepl('OF-MF-CF-MF|CF-MF-OF-MF',man_code)]
+      # dt.meas.combi <- dt.meas.combi[!grepl('EE-OF-MF|OF-MF-EE',man_code)]
+
+      # update combined restriction for 3 combinations
+      dt.meas.combi <- dt.meas.combi[!(grepl('RT-CT',man_code) & grepl('NT-CT',man_code))]
+      dt.meas.combi <- dt.meas.combi[!(grepl('OF-MF',man_code) & grepl('CF-MF',man_code))]
+      dt.meas.combi <- dt.meas.combi[!(grepl('EE',man_code) & grepl('OF-MF',man_code))]
 
 
   # combine all measurement combinations per NCU
@@ -174,10 +180,11 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # make a sequence to split the database
   ncu_steps <- unique(round(seq(0,max(dt$ncu),length.out = 60)))
-
+#--------
   # for loop goes through NCUs in subsets to save memory
   for(i in 2:length(ncu_steps)){
 
+    # i=6
     # select the row numbers to subset
     ncu_min <- ncu_steps[i-1]
     ncu_max <- ncu_steps[i]
@@ -199,7 +206,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # add a relative score for the impact of each measure based on meta-models only
     # rank of absolute effects of measures; this shows order of magnitude for each impact Y/C/N
     dt.ss[, c('odY','odSOC','oNsu') := lapply(.SD,function(x) frankv(abs(x),order=-1)),.SDcols = c('dY','dSOC','dNsu'),by=.(ncu,cgid)]
-
+#----------
     # update progress bar
     if(!quiet) {j = j+1; setTxtProgressBar(pb, j)}
 
@@ -227,24 +234,24 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
                            area_ncu_ha_tot=area_ncu_ha_tot[1],
                            bd=density[1]),
                     by=.(ncu,cgid)]
-
+#-------------
     # add total score of individual and combined measures, evaluated as total distance to target
     dt.ss2[,iuw := sum(uw)]
     dt.ss2[,bipmc := (uw[1]*sY_combi + uw[2]*sSOC_combi+uw[3]*sNsu_combi)/iuw]
 
-    # add scaling function (value - min) / (max - min)
-    mmsfun <- function(x){(x - min(x))/(max(x)-min(x))}
+    # add scaling function (value - min) / (max - min)        ==> when Scombi scores all ZERO for entire ncu (min & max)
+    mmsfun <- function(x){(x - min(x))/(max(x+1e-4)-min(x))}     # ==> denominator=0 and bipmc=NaN / added 0.0001 to max
 
     # add total score of individual and combined measures including user weighing
     dt.ss2[iuw !=3, bipmc := (mmsfun(sY_combi) * uw[1] + mmsfun(sSOC_combi)* uw[2] + mmsfun(sNsu_combi)* uw[3])/iuw,by=.(ncu)]
-
+#-------------
     # add the names of measures taken back in from cgid (saves some memory)
     dt.ss2 <- merge(dt.ss2,dt.meas.combi,by='cgid',all.x = TRUE)
 
-    # remove combinations of measues that are not allowed
+    # remove combinations of measures that are not allowed
     dt.ss2 <- dt.ss2[!is.na(man_code)]
 
-    # add a corrections core for the number of measures
+    # add a correction score for the number of measures
     if(nopt == TRUE){dt.ss2[,nmcf := 0.05/man_n]} else {dt.ss2[,nmcf := 0]}
 
     # add some uncertainty on the scoring value (in particular when zero)
@@ -254,7 +261,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     dt.ss2[,bipmcs := as.integer(frankv(bipmc+nmcf,order = -1)),by=ncu]
 
     # save into a list, this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
-    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmcs,yield_ref,soc_ref,n_sp_ref,bd)])
+    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmc,bipmcs,yield_ref,soc_ref,n_sp_ref,bd)])
 
 
   }
@@ -265,10 +272,14 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
 
   # estimate whether the target has been met on NCU level
   # dist_Y = current yield / yield target
-  # if target already met OR change in indicator will bring it above
-  dt.out[,tm_Y := fifelse(dist_Y >= 1 | dY >= (1 - dist_Y), 1,0)]
-  dt.out[,tm_C := fifelse(dist_C >= 1 | dSOC >= (1 - dist_C),1,0)]
-  dt.out[,tm_N := fifelse(dist_N <= 1 | dNsu <= (1 - dist_N),1,0)]
+  # if target already met OR change in indicator will bring it above/below
+  # dt.out[,tm_Y := fifelse(dist_Y >= 1 | dY >= (1 - dist_Y), 1,0)]
+  # dt.out[,tm_C := fifelse(dist_C >= 1 | dSOC >= (1 - dist_C),1,0)]
+  # dt.out[,tm_N := fifelse(dist_N <= 1 | dNsu <= (1 - dist_N),1,0)]
+  dt.out[,tm_Y := fifelse(dY < (1 - dist_Y),0,1)]
+  dt.out[,tm_C := fifelse(dSOC < (1 - dist_C),0,1)]
+  dt.out[,tm_N := fifelse(dNsu > (1 - dist_N),0,1)]
+
 
   # compare to initial targets met
   dt.out[,ti_Y := fifelse(dist_Y >= 1,1,0)]
@@ -308,7 +319,7 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # BIPMCS MUST BE CHANGED TO 1 for best measure and 11 for worst measure
     # **May 2024 weighted reference values and total ha per ncu
     pout2 <- dt.out[bipmcs==1,.(ncu,area_ncu_ha_tot,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,
-                                ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd)]
+                                ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd,bipmc,bipmcs)]
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
