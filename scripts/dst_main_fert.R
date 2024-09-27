@@ -51,7 +51,7 @@ d1 <- fread(paste0(floc,'db_final_europe.csv'))
 ma_models <- lmam(fname = 'C:/dst_outputs/mmc2_fert_till_crop_meas.xlsx')
 #ma_models <- lmam(fname = 'D:/ESA/02 phd projects/01 maddy young/01 data/mmc2_fert_till_crop_meas.xlsx')
 
-# # join MA impact models for all measures (fertilizer + tillage + cropping)
+# # # join MA impact models for all measures (fertilizer + tillage + cropping)
 dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models, covar = FALSE)
 dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models, covar = FALSE)
 #dt.m3 <- cIMAm(management='RFR',db = d1, mam = ma_models, covar = FALSE)
@@ -81,9 +81,6 @@ rm(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
  # dt.m <- rbind(dt.m5,dt.m6)
  # rm(dt.m5,dt.m6)
 
-# #nutrient efficiency only *** with RFR***
-# dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4)
-# rm(dt.m1,dt.m2,dt.m3,dt.m4)
 # #nutrient efficiency only---------------
  # dt.m1 <- cIMAm(management='EE',db = d1, mam = ma_models, covar = FALSE)
  # dt.m2 <- cIMAm(management='RFP',db = d1, mam = ma_models, covar = FALSE)
@@ -102,8 +99,12 @@ rm(dt.m1,dt.m2,dt.m4,dt.m5,dt.m6,dt.m7,dt.m8,dt.m9,dt.m10,dt.m11)
 # dt.m <- rbind(dt.m7,dt.m9,dt.m10)
 # rm(dt.m7,dt.m9,dt.m10)
 # #--------------------------
+# #nutrient efficiency only *** with RFR***-------------------------------------
+# dt.m <- rbind(dt.m1,dt.m2,dt.m3,dt.m4)
+# rm(dt.m1,dt.m2,dt.m3,dt.m4)
 
-# save meta-model tables in csv in outputs
+ #-----------------------------------------------------------------------------
+ # save meta-model tables in csv in outputs
 ma.models <- data.frame(ma_models$ma_mean,ma_models$ma_sd)
 # fwrite(ma.models,paste0(floc,'ma.models.csv'))
 ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
@@ -114,7 +115,7 @@ ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
 # June 2024: DST simulation for best_impact ($impact_best), score_duo, score_trio
 #=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(10,1,1),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(4,3,3),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
 
 
   #-----------------------------------------------------------------------------
@@ -196,53 +197,229 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(10,1,1),si
   # total changes over EU-27 ---------------------------------------------------
   #-----------------------------------------------------------------------------
 
-  # mean % change over EU-27 from dY, dC, dN outputs----------------------------
-  mean_dy <- mean(out.best$dY)*100
-  mean_dsoc <- mean(out.best$dSOC)*100
-  mean_dnsu <- mean(out.best$dNsu)*100
 
-  # absolute change in indicators-----------------------------------------------
-  out.best[, D_Y := ((1+dY) * yield_ref) - yield_ref ]
-  out.best[, D_SOC := ((1+dSOC) * soc_ref) - soc_ref ] # change in soc reference (%)
-  out.best[, D_Nsu := ((1+dNsu) * n_sp_ref) - n_sp_ref ]
-
-  # mean absolute change over EU-27---------------------------------------------
-  mean_D_Y <- mean(out.best$D_Y)                # kg ha-1
-  mean_D_C <- mean(out.best$D_SOC)              # % - ADDED BD TO FUNCTIONS for STOCK
-  mean_D_N <- mean(out.best$D_Nsu)              # kg ha-1
+  # 1- collect info on initial reference values in outputs
 
   # calculate SOC reference stock and change in stock (depth 30cm)
   # Cs (kg ha-1) = bd (kg m-3) / 1000 * soc % * 30cm * 1000
   # bd units are kg m-3 and converted to g cm-3 by not multiplying by 1000
   out.best[, soc_ref_s := bd * soc_ref * 30 ]
-  out.best[, D_SOC_s := ((1+dSOC) * soc_ref_s) - soc_ref_s ]
-  mean_D_Cs <- mean(out.best$D_SOC_s)
 
-  # average initial values (current situation)----------------------------------
+  # avg reference values (current situation)----------------------------------
   mean_yield_ref <- mean(out.best$yield_ref)    # kg ha-1
-  mean_n_sp_ref <- mean(out.best$n_sp_ref)      # kg ha-1
-  mean_soc_ref <- mean(out.best$soc_ref)        # % (concentration)
   mean_soc_ref_s <- mean(out.best$soc_ref_s)    # kg ha-1 @30cm (stock)
+  mean_n_sp_ref <- mean(out.best$n_sp_ref)      # kg ha-1
+  mean_soc_ref <- mean(out.best$soc_ref)        # % concentration (not used)
 
-  # % change from absolute average difference----------------------------------------------
-  mean_DY_perc <- mean_D_Y/mean_yield_ref*100
-  mean_DC_perc <- mean_D_C/mean_soc_ref*100
-  mean_DCs_perc <- mean_D_Cs/mean_soc_ref_s*100
-  mean_DN_perc <- mean_D_N/mean_n_sp_ref*100
+  # standard deviation of avg reference values for tables
+  mean_Y_ref_sd <- sd(out.best$yield_ref)
+  mean_Cs_ref_sd <- sd(out.best$soc_ref_s)
+  mean_N_ref_sd <- sd(out.best$n_sp_ref)
+
+  # log transformed mean and sd of yield and soc reference values
+  ltm_yref_t <- mean(log(out.best$yield_ref/1000))
+  ltm_yref_sd_t <- sd(log(out.best$yield_ref/1000))
+  btm_yref_t <- exp(ltm_yref_t)
+  btm_yref_sd_t <- exp(ltm_yref_sd_t)
+  ltm_cref_t <- mean(log(out.best$soc_ref_s/1000))
+  ltm_cref_sd_t <- sd(log(out.best$soc_ref_s/1000))
+  btm_cref_t <- exp(ltm_cref_t)
+  btm_cref_sd_t <- exp(ltm_cref_sd_t)
+
+
+  # 2- calculate mean % and absolute change
+
+  # avg % change over EU-27 from dY, dC, dN outputs-----------------------------
+  mean_dy <- mean(out.best$dY)*100
+  mean_dsoc <- mean(out.best$dSOC)*100
+  mean_dnsu <- mean(out.best$dNsu)*100
+
+  # standard deviation of avg % change
+  mean_dy_sd <- sd(out.best$dY*100)
+  mean_dsoc_sd <- sd(out.best$dSOC*100)
+  mean_dnsu_sd <- sd(out.best$dNsu*100)
+
+  # absolute change in indicators-----------------------------------------------
+  out.best[, D_Y := ((1+dY) * yield_ref) - yield_ref ]
+  out.best[, D_Y := ((1+dY) * yield_ref) - yield_ref ]
+  out.best[, D_SOC_s := ((1+dSOC) * soc_ref_s) - soc_ref_s ]
+  out.best[, D_Nsu := ((1+dNsu) * n_sp_ref) - n_sp_ref ]
+  out.best[, D_SOC := ((1+dSOC) * soc_ref) - soc_ref ] # change in soc reference (%)
+
+  # new values current Y, C, N--------------------------------------------------
+  out.best[, yield_new := yield_ref + D_Y]      # kg
+  out.best[, yield_new_t := yield_new/1000]     # tons
+  out.best[, soc_new := soc_ref_s + D_SOC_s]    # kg
+  out.best[, soc_new_t := soc_new/1000]         # tons
+  out.best[, n_sp_new :=  n_sp_ref + D_Nsu]     # kg
 
   # average new totals----------------------------------------------------------
-  avg_yield_new <- mean_yield_ref + mean_D_Y
-  avg_soc_new <- mean_soc_ref_s + mean_D_Cs
-  avg_n_sp_new <- mean_n_sp_ref + mean_D_N
+  avg_yield_new <- mean(out.best$yield_new)     # kg
+  avg_yield_new_t <- mean(out.best$yield_new_t) # tons
+  avg_soc_new <- mean(out.best$soc_new)         # kg
+  avg_soc_new_t <- mean(out.best$soc_new_t)     # tons
+  avg_n_sp_new <- mean(out.best$n_sp_new)       # kg
+
+  # standard deviation of avg new totals (Y_tons, C_tons, N_kg)
+  avg_y_sd <- sd(out.best$yield_new)            # kg
+  avg_y_sd_t <- sd(out.best$yield_new_t)        # tons
+  avg_cs_sd <- sd(out.best$soc_new)             # kg
+  avg_cs_sd_t <- sd(out.best$soc_new_t)         # tons
+  avg_n_sd <- sd(out.best$n_sp_new)             # kg
+
+  #### YIELD histograms for log-transformed mean-----------------------------------
+
+  # original histogram with original mean and sd--------------------------------
+  hist(out.best$yield_new_t, breaks=200, probability = TRUE)
+  abline(v = avg_yield_new_t, col='red', lwd = 3)
+  abline(v = avg_yield_new_t-avg_y_sd_t, col='blue', lwd = 3)
+  abline(v = avg_yield_new_t+avg_y_sd_t, col='blue', lwd = 3)
+  lines(density(out.best$yield_new_t), col = 'green', lwd = 3)
+
+  # log transformation----------------------------------------------------------
+  hist(log(out.best$yield_new_t), breaks=200, probability = TRUE)
+  ltm_y_t <- mean(log(out.best$yield_new_t))
+  ltm_y_sd_t <- sd(log(out.best$yield_new_t))
+  abline(v = ltm_y_t, col='red', lwd = 3)
+  abline(v = ltm_y_t-ltm_y_sd_t, col='blue', lwd = 3)
+  abline(v = ltm_y_t+ltm_y_sd_t, col='blue', lwd = 3)
+  lines(density(log(out.best$yield_new_t)), col = 'green', lwd = 3)
+
+  # back-transformation on original histogram-----------------------------------
+  hist(out.best$yield_new_t, breaks=200, probability = TRUE)
+  btm_y_t <- exp(mean(log(out.best$yield_new_t)))
+  btm_y_sd_t <- exp(sd(log(out.best$yield_new_t)))
+  abline(v = btm_y_t, col='red', lwd = 3)
+  abline(v = btm_y_t-btm_y_sd_t, col='blue', lwd = 3)
+  abline(v = btm_y_t+btm_y_sd_t, col='blue', lwd = 3)
+  lines(density(out.best$yield_new_t), col = 'green', lwd = 3)
+
+  #-----------------------------------------------------------------------------
+  #### SOC histograms for log-transformed mean-------------------------------------
+
+  # original histogram with original mean and sd--------------------------------
+  hist(out.best$soc_new_t, breaks=200, probability = TRUE)
+  abline(v = avg_soc_new_t, col='red', lwd = 3)
+  abline(v = avg_soc_new_t-avg_cs_sd_t, col='blue', lwd = 3)
+  abline(v = avg_soc_new_t+avg_cs_sd_t, col='blue', lwd = 3)
+  lines(density(out.best$soc_new_t), col = 'green', lwd = 3)
+
+  # log transformation----------------------------------------------------------
+  hist(log(out.best$soc_new_t), breaks=200, probability = TRUE)
+  ltm_cs_t <- mean(log(out.best$soc_new_t))
+  ltm_cs_sd_t <- sd(log(out.best$soc_new_t))
+  abline(v = ltm_cs_t, col='red', lwd = 3)
+  abline(v = ltm_cs_t-ltm_cs_sd_t, col='blue', lwd = 3)
+  abline(v = ltm_cs_t+ltm_cs_sd_t, col='blue', lwd = 3)
+  lines(density(log(out.best$soc_new_t)), col = 'green', lwd = 3)
+
+  # back-transformation on original histogram-----------------------------------
+  hist(out.best$soc_new_t, breaks=200, probability = TRUE, xlim = c(0, 200))
+  btm_cs_t <- exp(mean(log(out.best$soc_new_t)))
+  btm_cs_sd_t <- exp(sd(log(out.best$soc_new_t)))
+  abline(v = btm_cs_t, col='red', lwd = 3)
+  abline(v = btm_cs_t-btm_cs_sd_t, col='blue', lwd = 3)
+  abline(v = btm_cs_t+btm_cs_sd_t, col='blue', lwd = 3)
+  lines(density(out.best$soc_new_t), col = 'green', lwd = 3)
+  #-----------------------------------------------------------------------------
+
+  # ***not done because values are negative AND relatively normal distribution
+  # N SURPLUS histograms for log-transformed mean-----------------------------------
+  #
+  # # original histogram with original mean and sd
+  # hist(out.best$n_sp_new, breaks=200, probability = TRUE)
+  # abline(v = avg_n_sp_new, col='red', lwd = 3)
+  # abline(v = avg_n_sp_new-avg_n_sd, col='blue', lwd = 3)
+  # abline(v = avg_n_sp_new+avg_n_sd, col='blue', lwd = 3)
+  # lines(density(out.best$n_sp_new), col = 'green', lwd = 3)
+  #
+  # # log transformation
+  # hist(log(out.best$n_sp_new), breaks=200, probability = TRUE)
+  # ltm_n_t <- mean(log(out.best$n_sp_new))
+  # ltm_n_sd_t <- sd(log(out.best$n_sp_new))
+  # abline(v = ltm_n_t, col='red', lwd = 3)
+  # abline(v = ltm_n_t-ltm_n_sd_t, col='blue', lwd = 3)
+  # abline(v = ltm_n_t+ltm_n_sd_t, col='blue', lwd = 3)
+  # lines(density(log(out.best$n_sp_new)), col = 'green', lwd = 3)
+  #
+  # # back-transformation on original histogram
+  # hist(out.best$n_sp_new, breaks=200, probability = TRUE)
+  # btm_n_t <- exp(mean(log(out.best$n_sp_new)))
+  # btm_n_sd_t <- exp(sd(log(out.best$n_sp_new)))
+  # abline(v = btm_n_t, col='red', lwd = 3)
+  # abline(v = btm_n_t-btm_n_sd_t, col='blue', lwd = 3)
+  # abline(v = btm_n_t+btm_n_sd_t, col='blue', lwd = 3)
+  # lines(density(out.best$n_sp_new), col = 'green', lwd = 3)
+  #-----------------------------------------------------------------------------
+
+  # check that avg % change soc STOCK = CONCENTRATION---------------------------
+  # mean_dsoc_c <- mean(out.best$D_SOC_s)/mean(out.best$soc_ref_s)*100
+  # mean_dsoc_c_sd <- sd((out.best$D_SOC_s/out.best$soc_ref_s)*100)
+
+  # incorrect/rough calculations (NOT USED but save if needed) -------------------------------------------
+  # different because means of columns calculated first rather than on each row
+  # final value used = mean(new/ref)*100
+  # not used = (mean(new)/mean(ref))*100
+
+  # avg absolute change over EU-27
+  # mean_D_Y <- mean(out.best$D_Y)                # kg ha-1
+  # mean_D_Cs <- mean(out.best$D_SOC_s)           # stock
+  # mean_D_N <- mean(out.best$D_Nsu)              # kg ha-1
+  # mean_D_C <- mean(out.best$D_SOC)              # % - ADDED BD TO FUNCTIONS for STOCK
+
+  # % change from reference values
+  # mean_DY_perc <- mean_D_Y/mean_yield_ref*100
+  # mean_DC_perc <- mean_D_C/mean_soc_ref*100
+  # mean_DCs_perc <- mean_D_Cs/mean_soc_ref_s*100
+  # mean_DN_perc <- mean_D_N/mean_n_sp_ref*100
+  #-----------------------------------------------------------------------------
+
+  # average MCA index and sd (bipmc)
+  avg_index <- mean(out.best$bipmc)
+  avg_index_sd <- sd(out.best$bipmc)
 
   # save outputs for table------------------------------------------------------
-  totals_table <- data.frame(Y_tons = signif(avg_yield_new/1000, 3), Y_perc = signif(mean_dy,3),
-                             C_tons = signif(avg_soc_new/1000,3), Cs_perc = signif(mean_DCs_perc,3),
-                             N_kg = signif(avg_n_sp_new,3), N_perc = signif(mean_dnsu,3),
-                             Y_ref_tons = signif(mean_yield_ref/1000,3), Cs_ref_tons = signif(mean_soc_ref_s/1000,3),
-                             N_ref_kg = signif(mean_n_sp_ref,3), Cc_ref_perc = signif(mean_soc_ref,3),
-                             Y_diff_tons = signif(mean_D_Y/1000,3), Cs_diff_tons = signif(mean_D_Cs/1000,3), N_diff_kg = signif(mean_D_N,3))
+
+                             # mean tons absolute yield change and SD
+  totals_table <- data.frame(Y_tons = signif(avg_yield_new/1000,3), Y_tons_sd = signif(avg_y_sd/1000,3),
+                             # yield log-transformed mean and SD
+                             Y_tons_btm = signif(btm_y_t,3), Y_tons_btm_sd = signif(btm_y_sd_t,3),
+                             # mean % yield change and SD
+                             Y_perc = signif(mean_dy,3), Y_perc_sd = signif(mean_dy_sd,3),
+                             # mean tons absolute carbon stock change and SD
+                             C_tons = signif(avg_soc_new/1000,3), C_tons_sd = signif(avg_cs_sd/1000,3),
+                             # soc log-transformed mean and SD
+                             C_tons_btm = signif(btm_cs_t,3), C_tons_btm_sd = signif(btm_cs_sd_t,3),
+                             # mean % carbon stock change and SD
+                             Cs_perc = signif(mean_dsoc,3), Cs_perc_sd = signif(mean_dsoc_sd,3),
+                             # mean kg absolute N surplus change and SD
+                             N_kg = signif(avg_n_sp_new,3), N_kg_sd = signif(avg_n_sd,3),
+                             # mean % N surplus change and SD
+                             N_perc = signif(mean_dnsu,3), N_perc_sd = signif(mean_dnsu_sd,3),
+                             # mean MCA index
+                             mca_index = signif(avg_index,3), mca_index_sd = signif(avg_index_sd,3),
+                             # reference tons yield and SD
+                             Y_ref_tons = signif(mean_yield_ref/1000,3), Y_ref_tons_sd = signif(mean_Y_ref_sd/1000,3),
+                             # reference tons carbon stock and SD
+                             Cs_ref_tons = signif(mean_soc_ref_s/1000,3), Cs_ref_tons_sd = signif(mean_Cs_ref_sd/1000,3),
+                             # reference kg N surpus and SD
+                             N_ref_kg = signif(mean_n_sp_ref,3), N_ref_kg_sd = signif(mean_N_ref_sd,3),
+                             # other less important parameters (not used in tables)
+                             Cc_ref_perc = signif(mean_soc_ref,3))
+                             #Y_diff_tons = signif(mean_D_Y/1000,3), Cs_diff_tons = signif(mean_D_Cs/1000,3), N_diff_kg = signif(mean_D_N,3))
   totals_table
+
+fwrite(totals_table,paste0(floc,'totals_u111_n1.csv')) #equal user weights and 1 measure
+fwrite(totals_table,paste0(floc,'totals_u111_n2.csv')) #1 or 2 measures
+fwrite(totals_table,paste0(floc,'totals_u111_n3.csv')) #1, 2, or 3 measures
+fwrite(totals_table,paste0(floc,'totals_u211_n1.csv'))
+fwrite(totals_table,paste0(floc,'totals_u211_n2.csv'))
+fwrite(totals_table,paste0(floc,'totals_u433_n1.csv'))
+fwrite(totals_table,paste0(floc,'totals_u433_n2.csv'))
+fwrite(totals_table,paste0(floc,'totals_u111_n1_fert.csv')) #only right nutrient type
+fwrite(totals_table,paste0(floc,'totals_u111_n1_eff.csv')) #only NUE
+fwrite(totals_table,paste0(floc,'totals_u111_n1_till.csv')) #only tillage
+fwrite(totals_table,paste0(floc,'totals_u111_n1_crop.csv')) #only crop
 
 
   #-----------------------------------------------------------------------------
@@ -292,6 +469,8 @@ fwrite(freq_meas,paste0(floc,'freq_u(y10).csv')) #very high yield priority
 #-------------------------------------------------------------------------------
 
 
+
+#-------------------------------------------------------------------------------
 fwrite(totals_table,paste0(floc,'totals_u(211).csv')) #farmer weights (yield important)
 fwrite(totals_table,paste0(floc,'totals_u(121).csv')) #soc
 fwrite(totals_table,paste0(floc,'totals_u(112).csv')) #n surplus
