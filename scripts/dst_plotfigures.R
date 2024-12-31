@@ -9,6 +9,8 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(terra)
 require(data.table)
+install.packages("paletteer")
+library(paletteer)
 
 
 # install packages once for those not used before
@@ -34,6 +36,8 @@ terra::crs(r1) <- 'epsg:3035'
 # Error in x$.self$finalize() : attempt to apply non-function
 r1.p <- as.data.frame(r1,xy=TRUE)
 r1.p <- as.data.table(r1.p)
+
+#terra::writeRaster(r.fin,'products/r1.tif', overwrite = TRUE)
 
 #===============================================================================
 # IMPACT_BEST map for QGIS inspection
@@ -122,8 +126,9 @@ r1.p <- as.data.table(r1.p)
 # #terra::writeRaster(r.fin,'products/yield_ref_targ.tif', overwrite = TRUE)
 
 
+
 #===============================================================================
-# *** load functions to make a map by each band/output ****
+# DEFINE FUNCTIONS to make a map by each band/output
 #===============================================================================
 
 # visualisation function of a raster file (its a global plot, so it still uses
@@ -156,8 +161,8 @@ visualize <- function(raster, layer, name, breaks, labels, ftitle){
     ggtitle(ftitle)
 }
 
-#use this for plotting measures/categories
-visualize_discrete <- function(raster, layer, name, breaks, labels, ftitle){
+# *** use this for plotting measures/categories
+visualize_discrete <- function(raster, layer, mapcolor, name, breaks, labels, leg_cols, ftitle){
   # select the correct layer
   raster.int <- raster[layer]
   # define crs - ***changed from 4326 to 3035***
@@ -170,13 +175,41 @@ visualize_discrete <- function(raster, layer, name, breaks, labels, ftitle){
   ggplot() +
     geom_tile(data = df, aes(x = x, y = y,fill = cut(variable, breaks,labels = labels))) +
     plotcrs +
-    scale_fill_hue() +
+    mapcolor +
     xlab("") + ylab("")+
     #xlab("Longitude") + ylab("Latitude") +
     labs(fill = name) +
-    theme(text = element_text(size = 18),
-          legend.text=element_text(size=12),
-          legend.position = c(0.01,0.75),
+    theme(text = element_text(size = 24),
+          legend.text=element_text(size=16),
+          legend.position = c(0.28,0.88),
+          legend.background = element_rect(fill = "white",color='white'),
+          panel.border = element_blank(),
+          plot.title = element_text(hjust = 0.5)) +
+    guides(fill = guide_legend(ncol = leg_cols))  +
+    ggtitle(ftitle)
+}
+
+# *** use for plotting references, targets, and gaps
+visualize_discrete2 <- function(raster, layer, mapcolor, direction, name, breaks, labels, ftitle){
+  # select the correct layer
+  raster.int <- raster[layer]
+  # define crs - ***changed from 4326 to 3035***
+  plotcrs <- coord_sf(crs = 3035, lims_method = "box")
+  #raster to xy
+  df <- as.data.frame(raster.int, xy = TRUE)
+  #colnames
+  colnames(df) <- c("x", "y", "variable")
+  #plot
+  ggplot() +
+    geom_tile(data = df, aes(x = x, y = y,fill = cut(variable, breaks,labels = labels))) +
+    plotcrs +
+    scale_fill_brewer(palette = mapcolor,na.translate=TRUE, drop=FALSE,direction = direction) +
+    xlab("") + ylab("")+
+    #xlab("Longitude") + ylab("Latitude") +
+    labs(fill = name) +
+    theme(text = element_text(size = 28),
+          legend.text=element_text(size=20),
+          legend.position = c(0.19,0.85),
           legend.background = element_rect(fill = "white",color='white'),
           panel.border = element_blank(),
           plot.title = element_text(hjust = 0.5)) +
@@ -187,7 +220,7 @@ visualize_cont <- function(raster, layer, name, breaks, labels, ftitle){
   # select the correct layer
   raster.int <- raster[layer]
   # define crs
-  plotcrs <- coord_sf(crs = 4326, lims_method = "box")
+  plotcrs <- coord_sf(crs = 3035, lims_method = "box")
   #raster to xy
   df <- as.data.frame(raster.int, xy = TRUE)
   #colnames
@@ -212,13 +245,16 @@ visualize_cont <- function(raster, layer, name, breaks, labels, ftitle){
 
 
 #===============================================================================
-# plot and save figure files - BEST_IMPACT ALONE
+# MANAGEMENT MAPS - prepare and merge data with raster for plotting
 #===============================================================================
 
-#run first with each output then use the various plot functions
-r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
+#subset out.best with only management columns
+r.man <- out.best[,.(ncu,area_ncu_ha_tot,man_code,bipmc)]
 
-# make man codes numeric
+#merge management columns with raster created above
+r.man <- merge(r1.p, r.man, by.x = 'gncu2010_ext', by.y = 'ncu')
+
+# make man codes numeric--------------------------------------------------------
 # r.ncu[man_code == 'CF-MF' , man_num := 1]
 # r.ncu[man_code == 'OF-MF' , man_num := 2]
 # r.ncu[man_code == 'EE' , man_num := 3]
@@ -231,27 +267,73 @@ r.ncu <- merge(r1.p, out.best, by.x = 'gncu2010_ext', by.y = 'ncu')
 # r.ncu[man_code == 'CC' , man_num := 10]
 # r.ncu[man_code == 'RES' , man_num := 11]
 
-# with RFR removed
-r.ncu[man_code == 'CF-MF' , man_num := 1]
-r.ncu[man_code == 'OF-MF' , man_num := 2]
-r.ncu[man_code == 'EE' , man_num := 3]
+# 1 best option with RFR removed------------------------------------------------
+r.man[man_code == 'CF-MF' , man_num := 1]
+r.man[man_code == 'OF-MF' , man_num := 2]
+r.man[man_code == 'EE' , man_num := 3]
 # r.ncu[man_code == 'RFR' , man_num := 4]
-r.ncu[man_code == 'RFT' , man_num := 4]
-r.ncu[man_code == 'RFP' , man_num := 5]
-r.ncu[man_code == 'RT-CT' , man_num := 6]
-r.ncu[man_code == 'NT-CT' , man_num := 7]
-r.ncu[man_code == 'ROT' , man_num := 8]
-r.ncu[man_code == 'CC' , man_num := 9]
-r.ncu[man_code == 'RES' , man_num := 10]
+r.man[man_code == 'RFT' , man_num := 4]
+r.man[man_code == 'RFP' , man_num := 5]
+r.man[man_code == 'RT-CT' , man_num := 6]
+r.man[man_code == 'NT-CT' , man_num := 7]
+r.man[man_code == 'ROT' , man_num := 8]
+r.man[man_code == 'CC' , man_num := 9]
+r.man[man_code == 'RES' , man_num := 10]
+#------------------------------------------------------------------------------------------
+
+# best 2 options with RFR removed------------------------------------------------
+# r.man[man_code == 'CC-EE' , man_num := 1]
+# r.man[man_code == 'EE-RES' , man_num := 2]
+# r.man[man_code == 'EE-RFT' , man_num := 3]
+# r.man[man_code == 'CC-RES' , man_num := 4]
+# r.man[man_code == 'RES-ROT' , man_num := 5]
+# r.man[man_code == 'EE-ROT' , man_num := 6]
+# r.man[man_code == 'CC-ROT' , man_num := 7]
+# r.man[man_code == 'NT-CT-RES' , man_num := 8]
+# r.man[man_code == 'RFT-ROT' , man_num := 9]
+# r.man[man_code == 'OF-MF-ROT' , man_num := 10]
+# r.man[man_code == 'CC-RFT' , man_num := 11]
+# r.man[man_code == 'RFP-ROT' , man_num := 12]
+# r.man[man_code == 'RES-RFT' , man_num := 13]
+# r.man[man_code == 'EE-RFP' , man_num := 14]
+# r.man[man_code == 'RES-RT-CT' , man_num := 15]
+# #r.man[man_code == 'ROT-RT-CT' , man_num := 16]
+# #r.man[man_code == 'NT-CT-ROT' , man_num := 16]
+# r.man[is.na(man_num) , man_num := 16]
+#------------------------------------------------------------------------------------------
+
+# best 3 options with RFR removed------------------------------------------------
+# r.man[man_code == 'CC-EE-RES' , man_num := 1]
+# r.man[man_code == 'EE-RES-RFT' , man_num := 2]
+# r.man[man_code == 'EE-RFP-RFT' , man_num := 3]
+# r.man[man_code == 'CC-EE-RFT' , man_num := 4]
+# r.man[man_code == 'EE-RES-ROT' , man_num := 5]
+# r.man[man_code == 'CC-EE-ROT' , man_num := 6]
+# r.man[man_code == 'EE-RFT-ROT' , man_num := 7]
+# r.man[man_code == 'CC-NT-CT-RES' , man_num := 8]
+# r.man[man_code == 'NT-CT-RES-ROT' , man_num := 9]
+# r.man[man_code == 'CC-RES-ROT' , man_num := 10]
+# r.man[man_code == 'EE-NT-CT-RES' , man_num := 11]
+# r.man[man_code == 'RES-ROT-RT-CT' , man_num := 12]
+# r.man[man_code == 'CC-CF-MF-RES' , man_num := 13]
+# r.man[man_code == 'EE-RFP-ROT' , man_num := 14]
+# r.man[man_code == 'EE-RES-RT-CT' , man_num := 15]
+# #r.man[man_code == 'ROT-RT-CT' , man_num := 16]
+# #r.man[man_code == 'NT-CT-ROT' , man_num := 16]
+# r.man[is.na(man_num) , man_num := 16]
+
+#------------------------------------------------------------------------------------------
+
 
 # set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','man_code'))
+setcolorder(r.man, c('x', 'y', 'gncu2010_ext','man_code'))
 
 # convert to spatial raster
-r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:3035'
+r.man <- terra::rast(r.man,type='xyz')
+terra::crs(r.man) <- 'epsg:3035'
 
-# write as output for qgis
+
+# (not used) write as output for qgis------------------------------------------------------
 # terra::writeRaster(r.fin,'products/out.best.all.tif', overwrite = TRUE) #RFR removed = 10 measures
 # terra::writeRaster(r.fin,'products/out.best.fert1.tif', overwrite = TRUE)
 # terra::writeRaster(r.fin,'products/out.best.eff1.tif', overwrite = TRUE)
@@ -263,80 +345,130 @@ terra::crs(r.fin) <- 'epsg:3035'
 
 
 
+#===============================================================================
+# produce management map figures - BEST_IMPACT ALONE
+#===============================================================================
+
 #------------------------------------------------------------------------------------------
-#impact_best with 1 measure applied
+#impact_best ONE measure applied
+#------------------------------------------------------------------------------------------
+p1 <- visualize_discrete(raster = r.man,
+                         layer = 'man_num',
+                         mapcolor = paletteer::scale_fill_paletteer_d("ggthemes::Tableau_10",direction=-1),
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5),
+                         labels = c('combined fert. (CF)','organic fert. (OF)','enhanced efficiency fert. (EE)',
+                                    'right fert. timing (RFT)','right fert. placement (RFP)','reduced tillage (RT)',
+                                    'no tillage (NT)','crop rotation (ROT)','cover cropping (CC)','residue retention (RES)'),
+                         name = "",
+                         leg_cols = 1,
+                         ftitle = 'Best management measures')
+ggsave(filename = "products/out_best_all_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+#------------------------------------------------------------------------------------------
+#impact_best up to TWO measures applied
+#------------------------------------------------------------------------------------------
+p1 <- visualize_discrete(raster = r.man,
+                         layer = 'man_num',
+                         mapcolor = paletteer::scale_fill_paletteer_d("ggthemes::Classic_20",direction=1),
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5),
+                         labels = c('CC + EE','EE + RES','EE + RFT','CC + RES','RES + ROT','EE + ROT','CC + ROT',
+                                    'NT + RES','RFT + ROT','OF + ROT','CC + RFT','RFP + ROT','RES + RFT','EE + RFP',
+                                    'RES + RT','other'),
+                         name = "",
+                         ftitle = 'Best two combined measures')
+ggsave(filename = "products/two_best_all_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+#------------------------------------------------------------------------------------------
+#impact_best up to THREE measures applied
 #------------------------------------------------------------------------------------------
 
-p1 <- visualize_discrete(raster = r.fin,
+# low res (MS Word) = 400 dpi
+# medium res = 600 dpi
+# original high res (too slow in Word) = 1200 dpi
+p1 <- visualize_discrete(raster = r.man,
                          layer = 'man_num',
-                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5),
-                         labels = c('CF-MF','OF-MF','EE',
-                                    'RFT','RFP','RT-CT','NT-CT','ROT','CC','RES'),
-                         name = "Measures",
-                         ftitle = 'Best measures')
-ggsave(filename = "products/out_best_all_new.png",
+                         mapcolor = paletteer::scale_fill_paletteer_d("ggthemes::Classic_20",direction=1),
+                         breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5),
+                         labels = c('CC+EE+RES','EE+RES+RFT','EE+RFP+RFT','CC+EE+RFT','EE+RES+ROT','CC+EE+ROT',
+                                    'EE+RFT+ROT','CC+NT+RES','NT+RES+ROT','CC+RES+ROT','EE+NT+RES','RES+ROT+RT',
+                                    'CC+CF+RES','EE+RFP+ROT','EE+RES+RT','other'),
+                         name = "",
+                         ftitle = 'Best three combined measures')
+ggsave(filename = "products/three_best_all_3.png",
        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
 
 #------------------------------------------------------------------------------------------
 #       only fertilizer type - 1 measure
 # -----------------------------------------------------------------------------------------
 
-p1 <- visualize_discrete(raster = r.fin,
+p1 <- visualize_discrete(raster = r.man,
                          layer = 'man_num',
+                         mapcolor = paletteer::scale_fill_paletteer_d("ggthemes::Tableau_10",direction=1),
                          breaks = c(0.5,1.5,2.5),
-                         labels = c('CF-MF','OF-MF'),
+                         labels = c('combined fert. (CF)','organic fert. (OF)'),
                          name = "Measures",
+                         leg_cols = 1,
                          ftitle = 'Best nutrient type')
-ggsave(filename = "products/out_best_fert_new.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+ggsave(filename = "products/out_best_fert_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
 #------------------------------------------------------------------------------------------
 #       only nutrient efficiency type - 1 measure
 # -----------------------------------------------------------------------------------------
-p1 <- visualize_discrete(raster = r.fin,
-                         layer = 'man_num',
-                         breaks = c(2.5,3.5,4.5,5.5,6.5),
-                         labels = c('EE','RFR',
-                                    'RFT','RFP'),
-                         name = "Measures",
-                         ftitle = 'Best nutrient efficiency measure')
-ggsave(filename = "products/out_best_eff1.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+# p1 <- visualize_discrete(raster = r.fin,
+#                          layer = 'man_num',
+#                          breaks = c(2.5,3.5,4.5,5.5,6.5),
+#                          labels = c('EE','RFR',
+#                                     'RFT','RFP'),
+#                          name = "Measures",
+#                          ftitle = 'Best nutrient efficiency measure')
+# ggsave(filename = "products/out_best_eff1.png",
+#        plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
 
 #remove RFR
-p1 <- visualize_discrete(raster = r.fin,
+p1 <- visualize_discrete(raster = r.man,
                          layer = 'man_num',
+                         mapcolor = paletteer::scale_fill_paletteer_d("ggthemr::sea",direction=-1),
                          breaks = c(2.5,3.5,4.5,5.5),
-                         labels = c('EE',
-                                    'RFT','RFP'),
+                         labels = c('enhanced efficiency fert. (EE)','right fert. timing (RFT)','right fert. placement (RFP)'),
+                         leg_cols = 1,
                          name = "Measures",
                          ftitle = 'Best nutrient efficiency measure')
-ggsave(filename = "products/out_best_eff_new.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+ggsave(filename = "products/out_best_eff_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
 #------------------------------------------------------------------------------------------
 #       only tillage - 1 measure
 # -----------------------------------------------------------------------------------------
-p1 <- visualize_discrete(raster = r.fin,
+p1 <- visualize_discrete(raster = r.man,
                          layer = 'man_num',
+                         mapcolor = paletteer::scale_fill_paletteer_d("tvthemes::spongeBob",direction=1),
                          breaks = c(5.5,6.5,7.5),
-                         labels = c('RT-CT','NT-CT'),
+                         labels = c('reduced tillage (RT)','no tillage (NT)'),
                          name = "Measures",
+                         leg_cols = 1,
                          ftitle = 'Best tillage measure')
-ggsave(filename = "products/out_best_till_new.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+ggsave(filename = "products/out_best_till_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
 #------------------------------------------------------------------------------------------
 #       only cropping - 1 measure
 # -----------------------------------------------------------------------------------------
-p1 <- visualize_discrete(raster = r.fin,
+p1 <- visualize_discrete(raster = r.man,
                          layer = 'man_num',
+                         mapcolor = paletteer::scale_fill_paletteer_d("ggthemes::excel_Office_Theme",direction=-1),
                          breaks = c(7.5,8.5,9.5,10.5),
-                         labels = c('ROT','CC','RES'),
+                         labels = c('crop rotation (ROT)','cover cropping (CC)','residue retention (RES)'),
                          name = "Measures",
+                         leg_cols = 1,
                          ftitle = 'Best cropping measure')
-ggsave(filename = "products/out_best_crop_new.png",
-       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+ggsave(filename = "products/out_best_crop_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+
 
 
 
@@ -466,24 +598,419 @@ terra::writeRaster(r.fin,'products/out.trio.tif', overwrite = TRUE)
 # Reference values
 #===============================================================================
 
+#subset reference values
+ref.values <- out.best[,.(ncu,yield_ref_t,yield_targ_t,yield_new_t,soc_ref_t,soc_targ_t,soc_new_t,n_sp_ref,n_sp_crit,n_sp_new,
+                          yield_gap_t,yield_gap_fin_t,yield_gap_diff_t,yield_gap_diff_p,
+                          soc_gap_t,soc_gap_fin_t,soc_gap_diff_t,soc_gap_diff_p,
+                          n_sp_gap,n_sp_gap_fin,n_sp_gap_diff,n_sp_gap_diff_p)]
+
+ref.values[yield_gap_diff_p==-Inf , yield_gap_diff_p := 0]
+ref.values[yield_gap_diff_p==Inf , yield_gap_diff_p := 0]
+
+
+# ygap_pos_change,ygap_neut_change,ygap_neg_change
+# yield_gap_diff_t,soc_gap_diff_t,n_sp_gap_diff,
+# yield_gap_diff_p,soc_gap_diff_p,n_sp_gap_diff_p
+
 r.ncu <- merge(r1.p, ref.values, by.x = 'gncu2010_ext', by.y = 'ncu')
 
 # set columns in right order for conversion to raster
-setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref','soc_ref','n_sp_ref','yield_target','soc_target'))
+setcolorder(r.ncu, c('x', 'y', 'gncu2010_ext','yield_ref_t','yield_targ_t','yield_new_t','soc_ref_t','soc_targ_t','soc_new_t',
+                     'n_sp_ref','n_sp_crit','n_sp_new'))
 
 # convert to spatial raster
 r.fin <- terra::rast(r.ncu,type='xyz')
-terra::crs(r.fin) <- 'epsg:4326'
+terra::crs(r.fin) <- 'epsg:3035'
 # write as output
-terra::writeRaster(r.fin,'products/ref.values.tif', overwrite = TRUE)
+terra::writeRaster(r.fin,'products/ref.values.ncu.tif', overwrite = TRUE)
+
+#other breaks/colors
+#-------------------------------------------------------------------------------
+p1 <- visualize_discrete(raster = r.fin,
+                layer = 'yield_ref_t',
+                name = "Mg ha-1",
+                breaks = c(0,2.5,5,7.5,10,12.5,15,17.5,20,22.5,25,27.5,30,32.5,35,37.5,55),
+                labels = c('< 2.5','2.5 - 5','5 - 7.5','7.5 - 10','10 - 12.5','12.5 - 15','15 - 17.5','17.5 - 20','20 - 22.5',
+                           '22.5 - 25','25 - 27.5','27.5 - 30','30 - 32.5','32.5 - 35','35 - 37.5','37.5 - 50'),
+                ftitle = 'Current reference crop yield')
+ggsave(filename = "products/yield_ref_t.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'yield_ref_t',
+                         name = "Mg ha-1",
+                         breaks = c(0,5,10,15,20,25,30,35,55),
+                         labels = c('<5','5 - 10','10 - 15','15 - 20','20 - 25','25 - 30','30 - 35','35 - 50'),
+                         ftitle = 'Current reference crop yield')
+ggsave(filename = "products/yield_ref_t_2.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+p1 <- visualize_discrete(raster = r.fin,
+                         layer = 'yield_ref_t',
+                         name = "Mg ha-1",
+                         breaks = c(0,3.5,5.5,7,9.5,12.5,50),
+                         labels = c('< 3.5','3.5 - 5.5','5.5 - 7','7 - 9.5','9.5 - 12.5','12.5 - 47'),
+                         ftitle = 'Current reference crop yield')
+ggsave(filename = "products/yield_ref_t_3.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+#-------------------------------------------------------------------------------
+
+# Yield REFERENCE, FINAL & TARGETS
+#-------------------------------------------------------------------------------
+# find bins of equal sample number
+q1 <- quantile(out.best$yield_ref_t, probs = seq(0, 1, by = 1/6))
+q2 <- quantile(out.best$yield_targ_t, probs = seq(0, 1, by = 1/6))
+q3 <- quantile(out.best$yield_new_t, probs = seq(0, 1, by = 1/6))
+(q1+q2+q3)/3
+
+# plot reference map
+p1 <- visualize_discrete2(raster = r.fin,
+                         layer = 'yield_ref_t',
+                         mapcolor = 'YlGn',
+                         direction = 1,
+                         name = expression("Mg ha"^-1),
+                         breaks = c(0,4,6,8,10,15,55),
+                         labels = c('< 4','4 - 6','6 - 8','8 - 10','10 - 15','> 15'),
+                         ftitle = 'Actual crop yield')
+ggsave(filename = "products/yield_ref_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot target map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'yield_targ_t',
+                          mapcolor = 'YlGn',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(0,4,6,8,10,15,55),
+                          labels = c('< 4','4 - 6','6 - 8','8 - 10','10 - 15','> 15'),
+                          ftitle = 'Target crop yield')
+ggsave(filename = "products/yield_targ_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+
+# plot final "new" map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'yield_new_t',
+                          mapcolor = 'YlGn',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(0,4,6,8,10,15,55),
+                          labels = c('< 4','4 - 6','6 - 8','8 - 10','10 - 15','> 15'),
+                          ftitle = 'Expected crop yield')
+ggsave(filename = "products/yield_new_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+#-------------------------------------------------------------------------------
+
+# soc REFERENCE, FINAL & TARGETS
+#-------------------------------------------------------------------------------
+# find bins of equal sample number
+q1 <- quantile(out.best$soc_ref_t, probs = seq(0, 1, by = 1/6))
+q2 <- quantile(out.best$soc_targ_t, probs = seq(0, 1, by = 1/6))
+q3 <- quantile(out.best$soc_new_t, probs = seq(0, 1, by = 1/6))
+(q1+q2+q3)/3
+
+# plot reference map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_ref_t',
+                          mapcolor = 'Greys',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(0,30,45,55,65,75,2000),
+                          labels = c('< 30','30 - 45','45 - 55','55 - 65','65 - 75','> 75'),
+                          ftitle = 'Actual SOC stock')
+ggsave(filename = "products/soc_ref_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot target map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_targ_t',
+                          mapcolor = 'Greys',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(0,30,45,55,65,74,2000),
+                          labels = c('< 30','30 - 45','45 - 55','55 - 65','65 - 75','> 75'),
+                          ftitle = 'Target SOC stock')
+ggsave(filename = "products/soc_targ_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot final "new" map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_new_t',
+                          mapcolor = 'Greys',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(0,30,45,55,65,75,2000),
+                          labels = c('< 30','30 - 45','45 - 55','55 - 65','65 - 75','> 75'),
+                          ftitle = 'Expected SOC stock')
+ggsave(filename = "products/soc_new_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+#-------------------------------------------------------------------------------
+
+# N surplus REFERENCE, FINAL & TARGETS
+#-------------------------------------------------------------------------------
+# find bins of equal sample number
+q1 <- quantile(out.best$n_sp_ref, probs = seq(0, 1, by = 1/6))
+q2 <- quantile(out.best$n_sp_crit, probs = seq(0, 1, by = 1/6))
+q3 <- quantile(out.best$n_sp_new, probs = seq(0, 1, by = 1/6))
+(q1+q2+q3)/3
+
+# plot reference map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_ref',
+                          mapcolor = 'RdPu',
+                          direction = 1,
+                          name = expression("kg ha"^-1),
+                          breaks = c(-500,24,31,38,45,55,500),
+                          labels = c('< 24','24 - 31','31 - 38','38 - 45','45 - 55','> 55'),
+                          ftitle = 'Actual N surplus')
+ggsave(filename = "products/n_sp_ref_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot target map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_crit',
+                          mapcolor = 'RdPu',
+                          direction = 1,
+                          name = expression("kg ha"^-1),
+                          breaks = c(-500,24,31,38,45,55,500),
+                          labels = c('< 24','24 - 31','31 - 38','38 - 45','45 - 55','> 55'),
+                          ftitle = 'Critical N surplus')
+ggsave(filename = "products/n_sp_crit_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot final "new" map
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_new',
+                          mapcolor = 'RdPu',
+                          direction = 1,
+                          name = expression("kg ha"^-1),
+                          breaks = c(-500,24,31,38,45,55,500),
+                          labels = c('< 24','24 - 31','31 - 38','38 - 45','45 - 55','> 55'),
+                          ftitle = 'Expected N surplus')
+ggsave(filename = "products/n_sp_new_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+#-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
+
+# Yield GAPS CURRENT, FINAL, & DIFFERENCE
+#-------------------------------------------------------------------------------
+# find bins of equal sample number
+q1 <- quantile(out.best$yield_gap_t, probs = seq(0, 1, by = 1/6))
+q2 <- quantile(out.best$yield_gap_fin_t, probs = seq(0, 1, by = 1/6))
+(q1+q2)/2
+q3 <- quantile(out.best$yield_gap_change, probs = seq(0, 1, by = 1/6))
+q3
+min(abs(out.best$yield_gap_t!=-Inf))
+quantile(ref.values$yield_gap_diff_p, probs = seq(0, 1, by = 1/8),na.rm=T)
+
+# breaks = c(-5,0,0.4,1.4,2.2,3.6,40),
+# labels = c('< 0','0 - 0.4','0.4 - 1.4','1.4 - 2.2','2.2 - 3.6','> 3.6'),
+
+# plot current gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'yield_gap_t',
+                          mapcolor = 'YlGn',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(-10,-2,-0.5,0.5,2,3.5,40),
+                          labels = c('< -2','-2 to -0.5','-0.5 to 0.5','0.5 to 2','2 to 3.5', '> 3.5'),
+                          ftitle = 'Actual crop yield gap')
+ggsave(filename = "products/yield_gap_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot final gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'yield_gap_fin_t',
+                          mapcolor = 'YlGn',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(-10,-2,-0.5,0.5,2,3.5,40),
+                          labels = c('< -2','-2 to -0.5','-0.5 to 0.5','0.5 to 2','2 to 3.5', '> 3.5'),
+                          ftitle = 'Expected crop yield gap')
+ggsave(filename = "products/yield_gap_fin_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot absolute difference gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'yield_gap_diff_t',
+                          mapcolor = 'YlGn',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(-10,-2,-0.5,0.5,2,3.5,40),
+                          labels = c('< -2','-2 to -0.5','-0.5 to 0.5','0.5 to 2','2 to 3.5', '> 3.5'),
+                          ftitle = 'Difference in crop yield gap')
+ggsave(filename = "products/yield_gap_diff_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+
+quantile(out.best$ygap_pos_change, probs = seq(0, 1, by = 1/6),na.rm=T)
+quantile(out.best$ygap_neg_change, probs = seq(0, 1, by = 1/6),na.rm=T)
+
+
+# ????plot percentage difference gap to target----------------------------------
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'ygap_pos_change',
+                          mapcolor = 'Spectral',
+                          direction = 1,
+                          name = expression("% of gap"),
+                          breaks = c(-40,-10,0,10,50,100,2.8e6),
+                          labels = c('widened >10%','widened <10%',
+                                     'narrowed <10%','narrowed 10-50%',
+                                     'narrowed 50-100%', 'closed >100%'),
+                          ftitle = 'Relative change in crop yield gap')
+ggsave(filename = "products/yield_gap_diff_p9.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 1200)
+
+# ????plot percentage difference gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'yield_gap_diff_p',
+                          mapcolor = 'Spectral',
+                          direction = -1,
+                          name = expression("% of gap"),
+                          breaks = c(-2.7e+07,-150,-100,-50,-25,-5,0,5,1.5e+07),
+                          labels = c('< -150', '-150 to -100','-100 to -50',
+                                     '-50 to -25','-25 to -5',
+                                     '-5 to 0', '0 to 5','> 5'),
+                          ftitle = 'Relative change in crop yield gap')
+ggsave(filename = "products/yield_gap_diff_p_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# labels = c('previously at target, target surpassed','gap closed, target surpassed (>100% of gap)',
+#            'gap closed, target surpassed (<100% of gap)','gap narrowed, target not reached',
+#            'previously above target, gap induced', 'previously at target, gap induced'),
+# labels = c('at target -> below target','gap reversed (>100%)',
+#            'above target -> well above target','gap narrowed',
+#            'above target -> gap induced', 'at target -> above target'),
+#-------------------------------------------------------------------------------
+
+# soc GAPS CURRENT, FINAL, & DIFFERENCE
+#-------------------------------------------------------------------------------
+# find bins of equal sample number
+q1 <- quantile(out.best$soc_gap_t, probs = seq(0, 1, by = 1/6))
+q2 <- quantile(out.best$soc_gap_fin_t, probs = seq(0, 1, by = 1/6))
+q3 <- quantile(out.best$soc_gap_diff_t, probs = seq(0, 1, by = 1/6))
+q1
+q2
+q3
+(q1+q2+q3)/3
+
+#breaks = c(-2000,-10,-1,1,5,15,100),
+#labels = c('< -10','-10 to -1','-1 to 1','1 to 5','5 to 15', '> 15'),
+
+# plot current gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_gap_t',
+                          mapcolor = 'Greys',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(-2000,-10,-3,0,3,10,100),
+                          labels = c('< -10','-10 to -3','-3 to 0','0 to 3','3 to 10', '> 10'),
+                          ftitle = 'Actual SOC stock gap')
+ggsave(filename = "products/soc_gap_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot final gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_gap_fin_t',
+                          mapcolor = 'Greys',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(-2000,-10,-3,0,3,10,100),
+                          labels = c('< -10','-10 to -3','-3 to 0','0 to 3','3 to 10', '> 10'),
+                          ftitle = 'Expected SOC stock gap')
+ggsave(filename = "products/soc_gap_fin_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot difference gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_gap_diff_t',
+                          mapcolor = 'Greys',
+                          direction = 1,
+                          name = expression("Mg ha"^-1),
+                          breaks = c(-2000,-10,-3,0,3,10,100),
+                          labels = c('< -10','-10 to -3','-3 to 0','0 to 3','3 to 10', '> 10'),
+                          ftitle = 'Difference in SOC stock gap')
+ggsave(filename = "products/soc_gap_diff_t_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+
+# plot difference gap to target
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'soc_gap_diff_p',
+                          mapcolor = 'Spectral',
+                          direction = -1,
+                          name = expression("%"),
+                          breaks = c(-200000,-5,-2,-1,0,1,2,5,100000),
+                          labels = c(' < -5','-5 to -2','-2 to -1','-1 to 0',' 0 to 1',' 1 to 2',' 2 to 5', ' > 5'),
+                          ftitle = 'Relative change in SOC gap')
+ggsave(filename = "products/soc_gap_diff_p_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
+#-------------------------------------------------------------------------------
+
+# N surplus GAPS CURRENT, FINAL, & DIFFERENCE
+#-------------------------------------------------------------------------------
+# find bins of equal sample number
+q1 <- quantile(out.best$n_sp_gap, probs = seq(0, 1, by = 1/6))
+q2 <- quantile(out.best$n_sp_gap_fin, probs = seq(0, 1, by = 1/6))
+q1
+q2
+(q1+q2)/2
+quantile(out.best$n_sp_gap_diff_p, probs = seq(0, 1, by = 1/8),na.rm=T)
 
 
 
+# plot current gap to target----------------------------------------------------
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_gap',
+                          mapcolor = 'RdPu',
+                          direction = 1,
+                          name = expression("kg ha"^-1),
+                          breaks = c(-2000,-30,-10,0,10,30,1000),
+                          labels = c('< -30','-30 to -10','-10 to 0','0 to 10','10 to 30', '> 30'),
+                          ftitle = 'Actual N surplus gap')
+ggsave(filename = "products/n_sp_gap_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
+# plot final gap to target------------------------------------------------------
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_gap_fin',
+                          mapcolor = 'RdPu',
+                          direction = 1,
+                          name = expression("kg ha"^-1),
+                          breaks = c(-2000,-30,-10,0,10,30,1000),
+                          labels = c('< -30','-30 to -10','-10 to 0','0 to 10','10 to 30','> 30'),
+                          ftitle = 'Expected N surplus gap')
+ggsave(filename = "products/n_sp_gap_fin_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
+# plot absolute difference gap to target----------------------------------------
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_gap_diff',
+                          mapcolor = 'RdPu',
+                          direction = 1,
+                          name = expression("kg ha"^-1),
+                          breaks = c(-2000,-30,-10,0,10,30,1000),
+                          labels = c('< -30','-30 to -10','-10 to 0','0 to 10','10 to 30','> 30'),
+                          ftitle = 'Difference in N surplus gap')
+ggsave(filename = "products/n_sp_gap_diff_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
+# plot percentage difference gap to target----------------------------------------
+p1 <- visualize_discrete2(raster = r.fin,
+                          layer = 'n_sp_gap_diff_p',
+                          mapcolor = 'Spectral',
+                          direction = -1,
+                          name = expression("% of gap"),
+                          breaks = c(-2.5e+06,-300,-150,-100,-50,0,5,10,100),
+                          labels = c('< -300', '-300 to -150','-150 to -100',
+                                     '-100 to -50','-50 to 0',
+                                     '0 to 5', '5 to 10','> 10'),
+                          ftitle = 'Relative change in N surplus gap')
+ggsave(filename = "products/n_sp_gap_diff_p_400dpi.png",
+       plot = p1, width = 25, height = 25, units = c("cm"), dpi = 400)
 
-
+#-------------------------------------------------------------------------------
 
 
 
@@ -545,7 +1072,7 @@ terra::writeRaster(r.fin,'products/output1_test.tif', overwrite = TRUE)
 
 
 # PREVIOUS CODE FOR PLOTS FROM IFS PAPER
-# includes reference plots for indicators
+# includes reference plots for indicators---------------------------------------
 
 # r.ncu <- merge(r1.p, dt.OF, by.x = 'gncu2010_ext', by.y = 'ncu')
 # # set columns in right order for conversion to raster

@@ -115,7 +115,7 @@ ma.cov.models <- data.frame(ma_models$ma_cov_mean,ma_models$ma_cov_sd)
 # June 2024: DST simulation for best_impact ($impact_best), score_duo, score_trio
 #=====================================================================================
 
-sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(4,3,3),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
+sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1, nopt=FALSE)
 
 
   #-----------------------------------------------------------------------------
@@ -374,9 +374,68 @@ sim.all <- runDST(db = d1, dt.m = dt.m, output = 'best_impact',uw = c(4,3,3),sim
   # mean_DN_perc <- mean_D_N/mean_n_sp_ref*100
   #-----------------------------------------------------------------------------
 
+  # 3 - add index describing performance of measures/impacts
+
   # average MCA index and sd (bipmc)
   avg_index <- mean(out.best$bipmc)
   avg_index_sd <- sd(out.best$bipmc)
+
+  # 4 - convert to tons and map old and new values
+
+  out.best[, soc_targ_t := ( bd * soc_target * 30 ) / 1000 ]
+  out.best[, soc_ref_t := soc_ref_s / 1000 ]
+  out.best[, yield_targ_t := yield_target / 1000 ]
+  out.best[, yield_ref_t := yield_ref / 1000 ]
+
+  # initial gap to target
+  out.best[, yield_gap_t := yield_targ_t - yield_ref_t ]
+  out.best[, soc_gap_t := soc_targ_t - soc_ref_t ]
+  out.best[, n_sp_gap :=n_sp_ref - n_sp_crit ]
+
+  # final gap to target
+  out.best[, yield_gap_fin_t := yield_targ_t - yield_new_t ]
+  out.best[, soc_gap_fin_t := soc_targ_t - soc_new_t ]
+  out.best[, n_sp_gap_fin :=n_sp_new - n_sp_crit ]
+
+  out.best[, yield_gap_diff_t := yield_gap_fin_t - yield_gap_t ]
+  out.best[, soc_gap_diff_t := soc_gap_fin_t - soc_gap_t ]
+  out.best[, n_sp_gap_diff := n_sp_gap_fin - n_sp_gap ]
+
+
+  #-----------------------------------------------------------------------------
+  #-----------------------------------------------------------------------------
+
+
+
+
+
+
+
+  # change in gap to target
+  out.best[ yield_gap_t > 0, ygap_pos_change := ((yield_new_t - yield_ref_t)/yield_gap_t)*100 ]
+  out.best[ yield_gap_t == 0, ygap_neut_change := ((yield_new_t - yield_ref_t)/1e-20)*100 ] # replace with small value instead of zero
+  out.best[ yield_gap_t < 0, ygap_neg_change := ((yield_new_t - yield_ref_t)/abs(yield_gap_t))*100 ]
+  out.best[ is.na(ygap_pos_change), ygap_pos_change := -100 ] # replace with small value instead of zero
+
+
+
+
+  hist(out.best$yield_gap_change)
+
+  out.best[, yield_gap_diff_p := (yield_gap_fin_t - yield_gap_t)/abs(yield_gap_t)*100 ]
+
+  hist(out.best$yield_gap_diff_p, breaks=100)
+  out.best[, soc_gap_diff_p := (soc_gap_fin_t - soc_gap_t)/abs(soc_gap_t)*100 ]
+  out.best[, n_sp_gap_diff_p := (n_sp_gap_fin - n_sp_gap)/abs(n_sp_gap)*100 ]
+
+  # difference gap to target
+
+  #histograms for map intervals
+  hist(out.best$yield_ref_t, breaks=200, probability = TRUE)
+  hist(out.best$yield_ref_t, breaks=c(0,3.6,5.4,7,9.3,12.3,46.3,55), probability = TRUE)
+
+  quantile(out.best$yield_ref_t, probs = seq(0, 1, by = 1/6))
+
 
   # save outputs for table------------------------------------------------------
 
@@ -1122,6 +1181,7 @@ nsu.ref <- aggregate(.~n_sp_ref,data=d1,mean)
 
 
 
+# OLD --------------------------------------------------------------------------
 #score_single
 # ncu+dist_Y+dist_C+dist_N~bipmcs, value=man_code
 sim7 <- runDST(db = d1, dt.m = dt.m, output = 'score_single',uw = c(1,1,1),simyear = 5,quiet = FALSE,nmax=1)

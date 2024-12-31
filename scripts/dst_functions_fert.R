@@ -98,12 +98,13 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
   # add metric for INITIAL distance to target for inspecting maps
   d3[, dist_Y := yield_ref / yield_target ]
   d3[, dist_C := soc_ref / soc_target ]
-  d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)]
+  d3[, n_sp_crit := pmin(n_sp_sw_crit,n_sp_gw_crit)]
+  d3[, dist_N := n_sp_ref / pmin(n_sp_sw_crit,n_sp_gw_crit)] #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
   d3[is.na(dist_N), dist_N := 1]
 
   # estimate overall impact per measure & NCU given the different area coverage based on crop types
   # the outcome is a weighted mean based on sub-ncu crop areas for all parameters below
-  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density',colnames(d3))]
+  cols <- colnames(d3)[grepl('^dY|^sY|^sSOC|^dSOC|^sNsu|^dNsu|^dist_Y|^dist_C|^dist_N|^yield_ref|^soc_ref|^n_sp_ref|^density|^yield_target|^soc_target|^n_sp_crit',colnames(d3))]
   d3 <- d3[,lapply(.SD,function(x) weighted.mean(x,area_ncu,na.rm=T)),.SDcols = cols,by=c('ncu','man_code','area_ncu_ha_tot')]
 
   # create a set with all combinations of measures
@@ -232,7 +233,10 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
                            soc_ref=soc_ref[1],
                            n_sp_ref=n_sp_ref[1],
                            area_ncu_ha_tot=area_ncu_ha_tot[1],
-                           bd=density[1]),
+                           bd=density[1],
+                           yield_target=yield_target[1], #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+                           soc_target=soc_target[1],
+                           n_sp_crit=n_sp_crit[1]),
                     by=.(ncu,cgid)]
 #-------------
     # add total score of individual and combined measures, evaluated as total distance to target
@@ -261,8 +265,9 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     dt.ss2[,bipmcs := as.integer(frankv(bipmc+nmcf,order = -1)),by=ncu]
 
     # save into a list, this output gives all unique management combinations (cgid) per ncu along with score (bipmcs), impacts, distances to target
-    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmc,bipmcs,yield_ref,soc_ref,n_sp_ref,bd)])
+    dt.out[[i]] <- copy(dt.ss2[,.(ncu,area_ncu_ha_tot,cgid,man_code,man_n,dY,dSOC,dNsu,dist_Y,dist_C,dist_N,bipmc,bipmcs,yield_ref,soc_ref,n_sp_ref,bd,yield_target,soc_target,n_sp_crit)])
 
+    #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
   }
 
@@ -319,7 +324,8 @@ runDST <- function(db, dt.m, output = 'all',uw = c(1,1,1), simyear = 5, quiet = 
     # BIPMCS MUST BE CHANGED TO 1 for best measure and 11 for worst measure
     # **May 2024 weighted reference values and total ha per ncu
     pout2 <- dt.out[bipmcs==1,.(ncu,area_ncu_ha_tot,man_code,dY,dist_Y,dSOC,dist_C,dNsu,dist_N,tm_Y,tm_C,tm_N,
-                                ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd,bipmc,bipmcs)]
+                                ti_Y,ti_C,ti_N,yield_ref,soc_ref,n_sp_ref,bd,yield_target,soc_target,n_sp_crit,bipmc,bipmcs)]
+    #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
     setorder(pout2,ncu)
   } else {pout2 = NULL}
 
